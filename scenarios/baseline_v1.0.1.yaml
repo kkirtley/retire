@@ -1,0 +1,295 @@
+# ============================================================
+# Retirement Planning Baseline Scenario
+# Versioned, deterministic, local-first
+# ============================================================
+
+metadata:
+  scenario_name: "baseline"
+  version: "1.0.1"
+  description: "Deterministic baseline retirement plan for veteran household"
+  created: "2026-01-16"
+  currency: "USD"
+  cadence: "annual"
+
+# ------------------------------------------------------------
+# GLOBAL ASSUMPTIONS
+# ------------------------------------------------------------
+assumptions:
+  inflation_rate: 0.025 # 2.5% CPI
+  investment_return_default: 0.05 # 5.0% nominal annual return
+  success_age: 100 # Wife age; failure if resources exhausted before this
+  ss_cola: 0.02 # Long-run SSA COLA assumption (2.0%)
+  va_cola: 0.025 # VA COLA assumption (2.5%)
+  mo_effective_tax_rate: 0.04 # Missouri effective tax rate (approximation)
+  rmd_start_age: 75
+
+# ------------------------------------------------------------
+# HOUSEHOLD
+# ------------------------------------------------------------
+household:
+  husband:
+    label: "Husband"
+    current_age: 58
+    retirement_age: 67
+    modeled_death:
+      enabled: true
+      death_year: null # Set explicitly in scenario overrides (e.g., 2035)
+  wife:
+    label: "Wife"
+    current_age: 58
+    retirement_age: 67
+    modeled_death:
+      enabled: false
+      death_year: null
+
+  expense_stepdown_after_husband_death:
+    enabled: true
+    surviving_expense_ratio: 0.70 # 70% of prior household expenses
+
+# ------------------------------------------------------------
+# INCOME STREAMS
+# ------------------------------------------------------------
+income:
+  # ---------- Earned income (pre-retirement) ----------
+  earned_income:
+    husband:
+      enabled: true
+      taxable: true
+      annual_gross_salary_start: 195000.00
+      annual_raise_rate: 0.02
+      start_age: 58
+      end_age: 67 # stops at retirement age
+    wife:
+      enabled: true
+      taxable: true
+      annual_gross_salary_start: 53000.00
+      annual_raise_rate: 0.02
+      start_age: 58
+      end_age: 67
+
+  # ---------- VA Disability ----------
+  va_disability:
+    owner: "Husband"
+    amount_monthly: 4158.00
+    taxable: false
+    cola_rate: 0.025
+    start_age: 58
+    end_at_death: true
+
+  va_survivor_benefit:
+    owner: "Wife"
+    enabled: true
+    conditional_start:
+      husband_death_after: "2035-02-01"
+    amount_monthly: 0.00 # REQUIRED INPUT LATER – intentionally not guessed
+    taxable: false
+    cola_rate: 0.025
+
+  # ---------- Social Security ----------
+  social_security:
+    husband:
+      claim_age: 67
+      amount_monthly_at_claim: 3800.00 # midpoint of 3700–3900 range (override as desired)
+      cola_rate: 0.02
+    wife:
+      claim_age: 67
+      amount_monthly_at_claim: 1500.00
+      cola_rate: 0.02
+    survivor_rule:
+      enabled: true
+      step_up_to_higher_benefit: true
+
+# ------------------------------------------------------------
+# ACCOUNTS
+# ------------------------------------------------------------
+accounts:
+  - name: "Husband Roth IRA"
+    owner: "Husband"
+    type: "roth"
+    starting_balance: 300000.00
+    return_rate: 0.05
+
+  - name: "Husband Traditional IRA"
+    owner: "Husband"
+    type: "traditional"
+    starting_balance: 373000.00
+    return_rate: 0.05
+
+  # HSA: do NOT model contributions/withdrawals yet; keep as a static investment balance.
+  - name: "Household HSA (static)"
+    owner: "Household"
+    type: "hsa_static"
+    starting_balance: 5000.00
+    return_rate: 0.05
+    withdrawals_enabled: false
+    contributions_enabled: false
+
+  - name: "Wife Traditional IRA"
+    owner: "Wife"
+    type: "traditional"
+    starting_balance: 20000.00
+    return_rate: 0.05
+
+  - name: "Wife Roth 401k"
+    owner: "Wife"
+    type: "roth_401k"
+    starting_balance: 760.00
+    return_rate: 0.05
+
+  # Placeholder accounts for pre-tax 401(k) contributions (balances unknown/not provided yet)
+  - name: "Husband Roth 401k"
+    owner: "Husband"
+    type: "roth_401k"
+    starting_balance: 0.00
+    return_rate: 0.05
+
+  - name: "Husband Traditional 401k"
+    owner: "Husband"
+    type: "traditional_401k"
+    starting_balance: 0.00
+    return_rate: 0.05
+
+# ------------------------------------------------------------
+# CONTRIBUTIONS (Pre-retirement)
+# ------------------------------------------------------------
+contributions:
+  enabled: true
+
+  # Contributions apply from current age through the year before retirement age.
+  # Limits are not enforced in v1 unless you explicitly add a limits section; keep simple and deterministic.
+  schedules:
+    - name: "Husband Roth 401k contribution"
+      enabled: true
+      owner: "Husband"
+      destination_account: "Husband Roth 401k"
+      type: "percent_of_salary"
+      percent: 0.06
+      start_age: 58
+      end_age: 67
+
+    - name: "Husband Traditional 401k contribution"
+      enabled: true
+      owner: "Husband"
+      destination_account: "Husband Traditional 401k"
+      type: "percent_of_salary"
+      percent: 0.04
+      start_age: 58
+      end_age: 67
+
+    - name: "Wife Roth 401k contribution"
+      enabled: true
+      owner: "Wife"
+      destination_account: "Wife Roth 401k"
+      type: "percent_of_salary"
+      percent: 0.06
+      start_age: 58
+      end_age: 67
+
+  employer_match:
+    enabled: false
+    notes: "Employer match not provided; keep disabled unless user supplies details."
+
+# ------------------------------------------------------------
+# EXPENSES
+# ------------------------------------------------------------
+expenses:
+  base_living:
+    amount_annual: 120000.00 # $10,000/month
+    inflation_rate: 0.025
+
+  travel:
+    amount_annual: 5000.00
+    inflation_rate: 0.025
+
+  housing:
+    property_tax_annual: 5000.00
+    homeowners_insurance_annual: 2500.00
+    inflation_rate: 0.025
+
+# ------------------------------------------------------------
+# MORTGAGE (values fully specified for application use)
+# ------------------------------------------------------------
+mortgage:
+  enabled: true
+  starting_balance: 450000.00
+  interest_rate: 0.055
+  remaining_term_years: 15
+  payment_frequency: "monthly" # amortize monthly; aggregate to annual in results
+  payoff_by_age:
+    enabled: true
+    target_age: 65 # HARD REQUIREMENT
+
+# ------------------------------------------------------------
+# TAXES – FEDERAL
+# ------------------------------------------------------------
+federal_tax:
+  standard_deduction:
+    mfj: 30000.00 # Placeholder – configurable
+    single: 15000.00
+
+  brackets:
+    mfj:
+      - { rate: 0.10, up_to: 22000 }
+      - { rate: 0.12, up_to: 89450 }
+      - { rate: 0.22, up_to: 190750 }
+      - { rate: 0.24, up_to: 364200 }
+      - { rate: 0.32, up_to: 462500 }
+      - { rate: 0.35, up_to: 693750 }
+      - { rate: 0.37, up_to: null }
+
+    single:
+      - { rate: 0.10, up_to: 11000 }
+      - { rate: 0.12, up_to: 44725 }
+      - { rate: 0.22, up_to: 95375 }
+      - { rate: 0.24, up_to: 182100 }
+      - { rate: 0.32, up_to: 231250 }
+      - { rate: 0.35, up_to: 578125 }
+      - { rate: 0.37, up_to: null }
+
+# ------------------------------------------------------------
+# MEDICARE + IRMAA
+# ------------------------------------------------------------
+medicare:
+  start_age: 65
+
+  part_b:
+    base_premium_monthly: 174.70 # placeholder; configurable
+  part_d:
+    base_premium_monthly: 34.70 # placeholder; configurable
+
+  irmaa:
+    lookback_years: 2
+    mfj:
+      - { magi_up_to: 206000, part_b_add: 0, part_d_add: 0 }
+      - { magi_up_to: 258000, part_b_add: 69.90, part_d_add: 12.20 }
+      - { magi_up_to: 322000, part_b_add: 174.70, part_d_add: 31.50 }
+      - { magi_up_to: 386000, part_b_add: 279.40, part_d_add: 50.70 }
+      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
+
+    single:
+      - { magi_up_to: 103000, part_b_add: 0, part_d_add: 0 }
+      - { magi_up_to: 129000, part_b_add: 69.90, part_d_add: 12.20 }
+      - { magi_up_to: 161000, part_b_add: 174.70, part_d_add: 31.50 }
+      - { magi_up_to: 193000, part_b_add: 279.40, part_d_add: 50.70 }
+      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
+
+# ------------------------------------------------------------
+# WITHDRAWAL & CONVERSION STRATEGY
+# ------------------------------------------------------------
+withdrawal_strategy:
+  order:
+    - taxable
+    - traditional
+    - roth
+    - hsa_static
+
+roth_conversions:
+  enabled: true
+  mode: "manual_or_bracket_fill"
+  max_marginal_bracket: 0.22 # Fill up to 22% by default
+  annual_schedule: [] # Optional explicit overrides by year/age
+
+# ------------------------------------------------------------
+# SCENARIO OVERRIDES (EMPTY FOR BASELINE)
+# ------------------------------------------------------------
+overrides: {}

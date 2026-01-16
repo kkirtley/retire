@@ -1,0 +1,32 @@
+stages:
+  - lint
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - .venv/
+
+before_script:
+  - python3.12 -m venv .venv
+  - source .venv/bin/activate
+  - pip install --upgrade pip
+  - pip install -e ".[dev]"
+
+ruff_check:
+  stage: lint
+  script:
+    - ruff check .
+
+black_check:
+  stage: lint
+  script:
+    - black --check .
+
+pytest:
+  stage: test
+  script:
+    - pytest
