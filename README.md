@@ -33,10 +33,45 @@ This installs:
 pip list | grep retireplan
 ```
 
+## Make Targets
+
+The project includes a `Makefile` for convenient development commands:
+
+```bash
+make help         # Show all available targets
+make test         # Run pytest
+make lint         # Run ruff linter
+make format-check # Check code formatting with black
+make format       # Auto-format code with black
+make pre          # Run ALL checks: lint + format-check + test (use before pushing)
+make clean        # Remove cache and artifacts
+make install      # Install package in editable mode with dev dependencies
+make venv         # Create virtual environment
+```
+
+### Pre-push Workflow
+
+Before pushing your code, run:
+```bash
+make pre
+```
+
+This will run:
+1. **Ruff linting** — code style and correctness checks
+2. **Black format check** — code formatting validation
+3. **Pytest** — unit tests
+
+If all pass, you'll see a ready-to-push confirmation.
+
 ## Running Tests
 
 ```bash
 pytest
+```
+
+Or using make:
+```bash
+make test
 ```
 
 For verbose output with details:
@@ -52,6 +87,11 @@ pytest -v
 ruff check .
 ```
 
+Using make:
+```bash
+make lint
+```
+
 Auto-fix fixable issues:
 ```bash
 ruff check . --fix
@@ -63,13 +103,29 @@ ruff check . --fix
 black --check .
 ```
 
+Using make:
+```bash
+make format-check
+```
+
 Auto-format code:
 ```bash
 black .
 ```
 
+Using make:
+```bash
+make format
+```
+
 ### Run All Checks
 
+Using make (recommended):
+```bash
+make pre
+```
+
+Or manually:
 ```bash
 ruff check .
 black --check .
