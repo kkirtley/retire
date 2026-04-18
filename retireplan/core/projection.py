@@ -14,6 +14,7 @@ from retireplan.core.account_flow import (
 from retireplan.core.expenses import build_expenses
 from retireplan.core.income import build_income
 from retireplan.core.timeline_builder import build_timeline
+from retireplan.medicare import calculate_medicare_summary
 from retireplan.mortgage import build_mortgage_schedule
 from retireplan.scenario import RetirementScenario
 from retireplan.tax import TaxSummary, calculate_tax_summary
@@ -29,10 +30,12 @@ class ProjectionRow:
     filing_status: str
     income: dict[str, float]
     taxes: dict[str, float]
+    medicare: dict[str, float]
     expenses: dict[str, float]
     mortgage: dict[str, float]
     contributions: dict[str, float]
     withdrawals: dict[str, float]
+    alerts: tuple[str, ...]
     net_cash_flow: float
     account_balances_end: dict[str, float]
     liquid_resources_end: float
@@ -64,12 +67,30 @@ def project_scenario(
     failure_year: int | None = None
     warnings = list(scenario_warnings or [])
     warnings.extend(_stage_limit_warnings(scenario))
+    tax_history: dict[int, TaxSummary] = {}
+    filing_status_history: dict[int, str] = {}
+    previous_irmaa_tier: int | None = None
 
     for period in build_timeline(scenario):
         year = period.year
         income = build_income(scenario, period)
         mortgage_summary = mortgage_schedule.annual_summaries.get(year)
+        lookback_year = year - scenario.medicare.irmaa.lookback_years
+        lookback_tax = tax_history.get(lookback_year)
+        medicare_summary = calculate_medicare_summary(
+            scenario,
+            period,
+            lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
+            lookback_filing_status=filing_status_history.get(lookback_year),
+            previous_irmaa_tier=previous_irmaa_tier,
+        )
         expenses = build_expenses(scenario, period, mortgage_summary)
+        expenses.update(
+            {
+                "medicare_part_b": medicare_summary.part_b_base + medicare_summary.irmaa_part_b,
+                "medicare_part_d": medicare_summary.part_d_base + medicare_summary.irmaa_part_d,
+            }
+        )
         earned_income = {
             "husband": income["earned_income_husband"],
             "wife": income["earned_income_wife"],
@@ -92,6 +113,10 @@ def project_scenario(
         if failed and failure_year is None:
             failure_year = year
 
+        tax_history[year] = tax_summary
+        filing_status_history[year] = period.filing_status
+        previous_irmaa_tier = medicare_summary.irmaa_tier
+
         apply_account_returns(scenario, period, balances)
 
         liquid_resources = liquid_resources_total(scenario, balances)
@@ -107,10 +132,12 @@ def project_scenario(
                 filing_status=period.filing_status,
                 income=_rounded_values(income),
                 taxes=_rounded_values(tax_summary.ledger_values()),
+                medicare=_rounded_values(medicare_summary.ledger_values()),
                 expenses=_rounded_values(expenses),
                 mortgage=_rounded_values(_mortgage_ledger_values(mortgage_summary)),
                 contributions=_rounded_values(contributions),
                 withdrawals=_rounded_values(withdrawals),
+                alerts=medicare_summary.alerts,
                 net_cash_flow=round(net_cash_flow, 2),
                 account_balances_end=_rounded_values(balances),
                 liquid_resources_end=round(liquid_resources, 2),
@@ -130,7 +157,7 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection applies Stage 5 income, survivor, mortgage, and tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
+        "Projection applies Stage 6 Medicare, survivor, mortgage, and tax modeling, but RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
     ]
     return warnings
 

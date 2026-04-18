@@ -17,7 +17,7 @@ Status legend:
 | 3     | Complete | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                  |
 | 4     | Complete | Mortgage amortization and payoff solver                                  | Monthly amortization, payoff-by-age solving, annual mortgage ledger detail, and projection regression coverage are implemented and validated                                         |
 | 5     | Complete | Social Security, VA, and survivor transitions                            | Claim timing, COLA progression, survivor filing-status changes, expense stepdown, SS step-up, and VA survivor eligibility are implemented and covered by projection tests            |
-| 6     | Planned  | Medicare and IRMAA                                                       | YAML inputs exist; lookback and premium application are pending                                                                                                                      |
+| 6     | Complete | Medicare and IRMAA                                                       | Base premiums, 2-year IRMAA lookback, yearly Medicare expense lines, and IRMAA tier alerts are integrated and covered by unit and projection tests                                   |
 | 7     | Planned  | Withdrawals, Roth conversions, RMDs, QCDs, giving                        | Strategy schema is present; operational engine logic is pending                                                                                                                      |
 | 8     | Planned  | Reporting tables and chart outputs                                       | Run output exists as JSON ledger; reporting layer is still pending                                                                                                                   |
 | 9     | Planned  | Desktop UI and later SQLite persistence                                  | UI remains intentionally deferred until core engine stages stabilize                                                                                                                 |
@@ -159,12 +159,34 @@ Next stage:
 
 ### Stage 6
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
-- Medicare Part B and Part D premiums
-- IRMAA tier selection with two-year MAGI lookback
-- Warnings when conversions or income changes trigger tier movement
+Plan:
+- Create a dedicated `retireplan/medicare/` package with pure Medicare premium and IRMAA calculations
+- Apply Part B and Part D premiums when each living spouse reaches Medicare age
+- Determine IRMAA tier from the configured 2-year MAGI lookback using the filing status from the lookback year
+- Feed Medicare premiums into annual expense lines while keeping Medicare detail separate in the ledger
+
+Implementation tickets:
+- Ticket S6-1: Medicare premium calculation for covered spouses
+- Ticket S6-2: IRMAA tier selection using 2-year lookback MAGI and filing status
+- Ticket S6-3: projection integration for yearly Medicare expense lines and ledger detail
+- Ticket S6-4: tests for premium onset, lookback logic, and IRMAA tier behavior
+
+Delivered:
+- `retireplan/medicare/` package scaffold and premium calculator
+- Base Part B and Part D premium integration into projection expenses
+- IRMAA tier selection using 2-year MAGI lookback and filing-status threshold tables
+- Projection-row Medicare detail and IRMAA tier-change alerts
+- Tests for Medicare onset, IRMAA lookback behavior, IRMAA tier changes, and projection-level Medicare expense integration
+
+Exit criteria:
+- Medicare premium costs appear in yearly projection output for eligible spouses
+- IRMAA tier selection uses the 2-year lookback convention and is covered by tests
+- Full repo checks remain green after Medicare integration
+
+Next stage:
+- Begin Stage 7 withdrawal ordering, Roth conversions, RMDs, QCDs, and charitable-giving coordination
 
 ### Stage 7
 
