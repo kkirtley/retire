@@ -53,6 +53,7 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.activity_table.columns[4] == "roth_conversion_total"
     assert snapshot.account_balances_table.columns[0] == "year"
     assert snapshot.account_balances_table.columns[1] == "husband/wife ages"
+    assert snapshot.account_balances_table.columns[2] == "surplus to Taxable Bridge Account"
     assert "Husband Traditional IRA" in snapshot.account_balances_table.columns
     assert [table.name for table in snapshot.account_balance_tables] == [
         "All",
@@ -64,6 +65,7 @@ def test_ui_snapshot_exposes_stage_9_views():
         table.table for table in snapshot.account_balance_tables if table.name == "Husband"
     )
     transposed_husband_table = transpose_table(husband_table)
+    assert "surplus to Taxable Bridge Account" not in husband_table.columns
     assert "Wife Traditional IRA" not in husband_table.columns
     assert transposed_husband_table.columns[0] == "year"
     assert transposed_husband_table.rows[0][0] == "husband/wife ages"

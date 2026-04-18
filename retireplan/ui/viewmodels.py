@@ -250,14 +250,14 @@ def _account_balance_tables(
             if getattr(account.owner, "value", account.owner) == owner_name
         )
 
-    grouped_tables = [UiNamedTable(name="All", table=_account_balances_table(result))]
+    grouped_tables = [UiNamedTable(name="All", table=_account_balances_table(result, scenario))]
     for owner_name, account_names in owner_accounts.items():
         if not account_names:
             continue
         grouped_tables.append(
             UiNamedTable(
                 name=owner_name,
-                table=_account_balances_table(result, account_names),
+                table=_account_balances_table(result, scenario, account_names),
             )
         )
     return tuple(grouped_tables)
@@ -265,6 +265,7 @@ def _account_balance_tables(
 
 def _account_balances_table(
     result: ProjectionResult,
+    scenario: RetirementScenario,
     account_names: tuple[str, ...] | None = None,
 ) -> UiTableModel:
     if not result.ledger:
@@ -275,11 +276,19 @@ def _account_balances_table(
         if account_names is None
         else account_names
     )
-    columns = ("year", "husband/wife ages") + selected_account_names
+    surplus_destination = scenario.contributions.surplus_allocation.destination_account
+    surplus_column = ()
+    if surplus_destination in selected_account_names:
+        surplus_column = (f"surplus to {surplus_destination}",)
+    columns = ("year", "husband/wife ages") + surplus_column + selected_account_names
     rows = []
     for row in result.ledger:
+        surplus_values = ()
+        if surplus_column:
+            surplus_values = (round(max(row.net_cash_flow, 0.0), 2),)
         rows.append(
             (row.year, _ages_label(row.husband_age, row.wife_age))
+            + surplus_values
             + tuple(
                 row.account_balances_end.get(account_name, 0.0)
                 for account_name in selected_account_names
