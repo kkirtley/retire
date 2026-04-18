@@ -14,6 +14,7 @@ from retireplan.core.account_flow import (
 from retireplan.core.expenses import build_expenses
 from retireplan.core.income import build_income
 from retireplan.core.timeline_builder import build_timeline
+from retireplan.mortgage import build_mortgage_schedule
 from retireplan.scenario import RetirementScenario
 from retireplan.tax import TaxSummary, calculate_tax_summary
 
@@ -29,6 +30,7 @@ class ProjectionRow:
     income: dict[str, float]
     taxes: dict[str, float]
     expenses: dict[str, float]
+    mortgage: dict[str, float]
     contributions: dict[str, float]
     withdrawals: dict[str, float]
     net_cash_flow: float
@@ -57,6 +59,7 @@ def project_scenario(
     """Run a Stage 3 annual projection using the richer scenario file as input."""
 
     balances = {account.name: float(account.starting_balance) for account in scenario.accounts}
+    mortgage_schedule = build_mortgage_schedule(scenario)
     ledger: list[ProjectionRow] = []
     failure_year: int | None = None
     warnings = list(scenario_warnings or [])
@@ -65,7 +68,8 @@ def project_scenario(
     for period in build_timeline(scenario):
         year = period.year
         income = build_income(scenario, period)
-        expenses = build_expenses(scenario, period)
+        mortgage_summary = mortgage_schedule.annual_summaries.get(year)
+        expenses = build_expenses(scenario, period, mortgage_summary)
         earned_income = {
             "husband": income["earned_income_husband"],
             "wife": income["earned_income_wife"],
@@ -104,6 +108,7 @@ def project_scenario(
                 income=_rounded_values(income),
                 taxes=_rounded_values(tax_summary.ledger_values()),
                 expenses=_rounded_values(expenses),
+                mortgage=_rounded_values(_mortgage_ledger_values(mortgage_summary)),
                 contributions=_rounded_values(contributions),
                 withdrawals=_rounded_values(withdrawals),
                 net_cash_flow=round(net_cash_flow, 2),
@@ -125,12 +130,8 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection applies Stage 3 tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
+        "Projection applies Stage 4 mortgage and tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
     ]
-    if scenario.mortgage.enabled:
-        warnings.append(
-            "Mortgage is currently modeled as scheduled annual payments only; amortization, extra principal solving, and payoff-by-age enforcement are not applied yet."
-        )
     return warnings
 
 
@@ -171,3 +172,16 @@ def _settle_period_cash_flow(
 
 def _rounded_values(values: dict[str, float]) -> dict[str, float]:
     return {key: round(value, 2) for key, value in values.items()}
+
+
+def _mortgage_ledger_values(mortgage_summary) -> dict[str, float]:
+    if mortgage_summary is None:
+        return {
+            "scheduled_payment": 0.0,
+            "extra_principal": 0.0,
+            "total_payment": 0.0,
+            "interest": 0.0,
+            "principal": 0.0,
+            "remaining_balance": 0.0,
+        }
+    return mortgage_summary.ledger_values()

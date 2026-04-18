@@ -15,7 +15,7 @@ Status legend:
 | 1     | Complete | Schema model, YAML loader, validation, diagnostics                       | Loader is wired through the package and CLI; baseline scenario validates                                                                                                             |
 | 2     | Complete | Deterministic annual projection engine                                   | Timeline-based annual periods, modular Stage 2 cashflow calculations, reusable timeline events, and golden ledger checkpoints are implemented; later-stage domains are still pending |
 | 3     | Complete | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                  |
-| 4     | Planned  | Mortgage amortization and payoff solver                                  | Mortgage inputs exist; current engine treats mortgage as scheduled payments only                                                                                                     |
+| 4     | Complete | Mortgage amortization and payoff solver                                  | Monthly amortization, payoff-by-age solving, annual mortgage ledger detail, and projection regression coverage are implemented and validated                                         |
 | 5     | Planned  | Social Security, VA, and survivor transitions                            | Scenario supports these rules; engine needs fuller transition logic                                                                                                                  |
 | 6     | Planned  | Medicare and IRMAA                                                       | YAML inputs exist; lookback and premium application are pending                                                                                                                      |
 | 7     | Planned  | Withdrawals, Roth conversions, RMDs, QCDs, giving                        | Strategy schema is present; operational engine logic is pending                                                                                                                      |
@@ -109,12 +109,33 @@ Follow-up notes:
 
 ### Stage 4
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
+Plan:
+- Create a dedicated `retireplan/mortgage/` package for monthly amortization and payoff solving
+- Solve for additional monthly principal required to satisfy the payoff-by-age target without changing the public scenario shape
+- Aggregate monthly mortgage activity into annual ledger detail for payment, interest, principal, extra principal, and remaining balance
+- Feed annual mortgage cash outflows into Stage 2/3 expense handling while keeping mortgage detail separate in the ledger
+
+Implementation tickets:
+- Ticket S4-1: monthly amortization schedule from the scenario mortgage inputs
+- Ticket S4-2: payoff-by-age solver for extra principal
+- Ticket S4-3: annual mortgage summary integration into the projection ledger
+- Ticket S4-4: tests for amortization math, payoff timing, and projection integration
+
+Delivered:
 - Mortgage amortization schedule
 - Extra-principal solver to satisfy payoff-by-age target
-- Property tax and homeowners insurance rolled into annual housing outputs
+- Projection ledger mortgage detail for scheduled payment, extra principal, interest, principal, and remaining balance
+- Property tax and homeowners insurance remain in annual housing outputs alongside mortgage cash flow
+
+Exit criteria:
+- Mortgage payoff is enforced by the configured target age when enabled
+- Projection rows expose mortgage detail separately from generic expenses
+- Full repo checks remain green after mortgage integration
+
+Next stage:
+- Begin Stage 5 Social Security, VA, and survivor-transition integration work beyond the current baseline behavior
 
 ### Stage 5
 
