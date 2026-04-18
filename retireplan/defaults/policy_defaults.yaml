@@ -64,6 +64,12 @@ medicare:
 
   irmaa:
     lookback_years: 2
+    reconsideration:
+      enabled: false
+      event: work_stoppage
+      use_current_year_magi: true
+      apply_after_retirement: true
+      override_conversion_guardrails: false
     mfj:
       - { magi_up_to: 206000, part_b_add: 0.00, part_d_add: 0.00 }
       - { magi_up_to: 258000, part_b_add: 69.90, part_d_add: 12.20 }

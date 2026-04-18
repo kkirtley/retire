@@ -273,3 +273,34 @@ def test_conversion_only_tax_method_skips_tax_on_tax_feedback():
         incremental_row.withdrawals["Husband Traditional IRA"]
         > conversion_only_row.withdrawals["Husband Traditional IRA"]
     )
+
+
+def test_retirement_irmaa_override_can_relax_conversion_guardrails():
+    scenario = _baseline_scenario()
+    scenario.simulation.start_date = date(2033, 1, 1)
+    scenario.mortgage.enabled = False
+    scenario.expenses.base_living.amount_annual = 0.0
+    scenario.expenses.travel.amount_annual = 0.0
+    scenario.expenses.housing.property_tax.amount_annual = 0.0
+    scenario.expenses.housing.homeowners_insurance.amount_annual = 0.0
+    scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
+    scenario.strategy.roth_conversions.irmaa_controls.enabled = True
+    scenario.strategy.roth_conversions.irmaa_controls.reduce_if_exceeded = True
+    scenario.strategy.roth_conversions.irmaa_controls.max_tier = 0
+
+    without_override = deepcopy(scenario)
+    without_override.medicare.irmaa.reconsideration.override_conversion_guardrails = False
+    with_override = deepcopy(scenario)
+    with_override.medicare.irmaa.reconsideration.override_conversion_guardrails = True
+
+    without_override_result = project_scenario(without_override)
+    with_override_result = project_scenario(with_override)
+    without_override_row = next(
+        item for item in without_override_result.ledger if item.year == 2033
+    )
+    with_override_row = next(item for item in with_override_result.ledger if item.year == 2033)
+
+    assert without_override_row.strategy["roth_conversion_total"] == 185996.87
+    assert with_override_row.strategy["roth_conversion_total"] == 200000.0
+    assert any("Reduced Roth conversion" in alert for alert in without_override_row.alerts)
+    assert not any("Reduced Roth conversion" in alert for alert in with_override_row.alerts)

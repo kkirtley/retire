@@ -7,6 +7,7 @@ from math import ceil
 
 from retireplan.core.account_flow import annual_return_for_year
 from retireplan.core.timeline_builder import TimelinePeriod
+from retireplan.medicare.premiums import should_override_irmaa_conversion_guardrails
 from retireplan.scenario import Account, AccountOwner, AccountType, RetirementScenario
 from retireplan.tax import TaxSummary, calculate_tax_summary
 
@@ -277,6 +278,7 @@ def _execute_roth_conversions(
 
     constrained = _cap_conversion_by_constraints(
         scenario,
+        period,
         filing_status,
         income,
         cash_withdrawals,
@@ -685,6 +687,7 @@ def _apply_adjustment(amount: float, action: str, percent: float) -> float:
 
 def _cap_conversion_by_constraints(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     cash_withdrawals: dict[str, float],
@@ -692,7 +695,7 @@ def _cap_conversion_by_constraints(
     minimum_floor: float,
 ) -> float:
     config = scenario.strategy.roth_conversions
-    if _conversion_allowed(scenario, filing_status, income, cash_withdrawals, candidate):
+    if _conversion_allowed(scenario, period, filing_status, income, cash_withdrawals, candidate):
         return round(candidate, 2)
     if not config.tax_constraints.allow_partial_bracket_fill:
         return 0.0
@@ -701,7 +704,7 @@ def _cap_conversion_by_constraints(
     upper = candidate
     for _ in range(24):
         probe = (lower + upper) / 2
-        if _conversion_allowed(scenario, filing_status, income, cash_withdrawals, probe):
+        if _conversion_allowed(scenario, period, filing_status, income, cash_withdrawals, probe):
             lower = probe
         else:
             upper = probe
@@ -765,6 +768,7 @@ def _minimum_conversion_floor(
 
 def _conversion_allowed(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     cash_withdrawals: dict[str, float],
@@ -786,6 +790,8 @@ def _conversion_allowed(
 
     irmaa_controls = scenario.strategy.roth_conversions.irmaa_controls
     if not irmaa_controls.enabled or not irmaa_controls.reduce_if_exceeded:
+        return True
+    if should_override_irmaa_conversion_guardrails(scenario, period):
         return True
     return _irmaa_tier_for_magi(scenario, filing_status, summary.adjusted_gross_income) <= int(
         irmaa_controls.max_tier

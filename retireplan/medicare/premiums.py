@@ -37,6 +37,8 @@ def calculate_medicare_summary(
     period: TimelinePeriod,
     lookback_magi: float | None,
     lookback_filing_status: str | None,
+    current_year_magi: float | None = None,
+    current_year_filing_status: str | None = None,
     previous_irmaa_tier: int | None = None,
 ) -> MedicareSummary:
     covered_people = _covered_people(scenario, period)
@@ -53,7 +55,14 @@ def calculate_medicare_summary(
             alerts=(),
         )
 
-    tier_index, tier = _irmaa_tier(scenario, lookback_magi, lookback_filing_status)
+    tier_index, tier, determination_year, determination_label = effective_irmaa_tier(
+        scenario,
+        period,
+        lookback_magi,
+        lookback_filing_status,
+        current_year_magi=current_year_magi,
+        current_year_filing_status=current_year_filing_status,
+    )
     part_b_base = float(scenario.medicare.part_b.base_premium_monthly) * 12 * covered_people
     part_d_base = float(scenario.medicare.part_d.base_premium_monthly) * 12 * covered_people
     irmaa_part_b = float(tier.part_b_add) * 12 * covered_people
@@ -62,9 +71,8 @@ def calculate_medicare_summary(
 
     alerts: list[str] = []
     if previous_irmaa_tier is not None and tier_index != previous_irmaa_tier:
-        lookback_year = period.year - scenario.medicare.irmaa.lookback_years
         alerts.append(
-            f"IRMAA tier changed from {previous_irmaa_tier} to {tier_index} based on {lookback_year} MAGI."
+            f"IRMAA tier changed from {previous_irmaa_tier} to {tier_index} based on {determination_label}."
         )
 
     return MedicareSummary(
@@ -75,9 +83,70 @@ def calculate_medicare_summary(
         total=round(total, 2),
         covered_people=covered_people,
         irmaa_tier=tier_index,
-        lookback_year=period.year - scenario.medicare.irmaa.lookback_years,
+        lookback_year=determination_year,
         alerts=tuple(alerts),
     )
+
+
+def effective_irmaa_tier(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+    lookback_magi: float | None,
+    lookback_filing_status: str | None,
+    current_year_magi: float | None = None,
+    current_year_filing_status: str | None = None,
+) -> tuple[int, IRMAATier, int | None, str]:
+    effective_magi = lookback_magi
+    effective_filing_status = lookback_filing_status
+    determination_year = period.year - scenario.medicare.irmaa.lookback_years
+    determination_label = f"{determination_year} MAGI"
+
+    if _use_irmaa_reconsideration(scenario, period, current_year_magi):
+        effective_magi = current_year_magi
+        effective_filing_status = current_year_filing_status or period.filing_status
+        determination_year = period.year
+        determination_label = (
+            "current-year MAGI via "
+            f"{scenario.medicare.irmaa.reconsideration.event} reconsideration"
+        )
+
+    tier_index, tier = _irmaa_tier(scenario, effective_magi, effective_filing_status)
+    return tier_index, tier, determination_year, determination_label
+
+
+def should_override_irmaa_conversion_guardrails(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+) -> bool:
+    reconsideration = scenario.medicare.irmaa.reconsideration
+    return _is_irmaa_reconsideration_active(scenario, period) and bool(
+        reconsideration.override_conversion_guardrails
+    )
+
+
+def _use_irmaa_reconsideration(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+    current_year_magi: float | None,
+) -> bool:
+    reconsideration = scenario.medicare.irmaa.reconsideration
+    return (
+        _is_irmaa_reconsideration_active(scenario, period)
+        and reconsideration.use_current_year_magi
+        and current_year_magi is not None
+    )
+
+
+def _is_irmaa_reconsideration_active(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+) -> bool:
+    reconsideration = scenario.medicare.irmaa.reconsideration
+    if not reconsideration.enabled:
+        return False
+    if reconsideration.apply_after_retirement:
+        return period.husband_retired or period.wife_retired
+    return False
 
 
 def _covered_people(scenario: RetirementScenario, period: TimelinePeriod) -> int:

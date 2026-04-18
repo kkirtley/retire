@@ -314,6 +314,15 @@ state_tax:
   taxable_income_basis: "federal_taxable_income"
   effective_rate: 0.04
 
+medicare:
+  irmaa:
+    reconsideration:
+      enabled: true
+      event: "work_stoppage"
+      use_current_year_magi: true
+      apply_after_retirement: true
+      override_conversion_guardrails: true
+
 strategy:
   roth_conversions:
     enabled: true

@@ -49,6 +49,28 @@ def test_irmaa_uses_two_year_lookback_with_single_thresholds():
     assert summary.alerts
 
 
+def test_irmaa_reconsideration_can_use_current_year_magi_after_retirement():
+    scenario = _baseline_scenario()
+    period = next(item for item in build_timeline(scenario) if item.year == 2033)
+
+    summary = calculate_medicare_summary(
+        scenario,
+        period,
+        lookback_magi=342105.79,
+        lookback_filing_status="mfj",
+        current_year_magi=180000.0,
+        current_year_filing_status="mfj",
+        previous_irmaa_tier=2,
+    )
+
+    assert summary.irmaa_tier == 0
+    assert summary.lookback_year == 2033
+    assert (
+        "IRMAA tier changed from 2 to 0 based on current-year MAGI via work_stoppage reconsideration."
+        in summary.alerts
+    )
+
+
 def test_projection_adds_medicare_costs_and_irmaa_alerts():
     scenario = deepcopy(_baseline_scenario())
 
@@ -57,12 +79,21 @@ def test_projection_adds_medicare_costs_and_irmaa_alerts():
 
     pre_medicare = rows[2031]
     medicare_start = rows[2032]
-    irmaa_reset_year = rows[2038]
+    reconsideration_year = rows[2033]
+    irmaa_reset_year = rows[2036]
 
     assert pre_medicare.medicare["total"] == 0.0
     assert medicare_start.medicare["covered_people"] == 2.0
     assert medicare_start.expenses["medicare_part_b"] > 0.0
     assert medicare_start.expenses["medicare_part_d"] > 0.0
     assert "IRMAA tier changed from 0 to 2 based on 2030 MAGI." in medicare_start.alerts
+    assert reconsideration_year.medicare["irmaa_tier"] == 1.0
+    assert (
+        "IRMAA tier changed from 2 to 1 based on current-year MAGI via work_stoppage reconsideration."
+        in reconsideration_year.alerts
+    )
     assert irmaa_reset_year.medicare["irmaa_tier"] == 0.0
-    assert "IRMAA tier changed from 1 to 0 based on 2036 MAGI." in irmaa_reset_year.alerts
+    assert (
+        "IRMAA tier changed from 1 to 0 based on current-year MAGI via work_stoppage reconsideration."
+        in irmaa_reset_year.alerts
+    )

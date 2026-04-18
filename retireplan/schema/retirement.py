@@ -118,6 +118,11 @@ class ConversionTaxPaymentTiming(str, Enum):
 
 class EstimatedTaxMethod(str, Enum):
     INCREMENTAL = "incremental"
+
+
+class LifeChangingEvent(str, Enum):
+    WORK_STOPPAGE = "work_stoppage"
+    WORK_REDUCTION = "work_reduction"
     CONVERSION_ONLY = "conversion_only"
 
 
@@ -680,10 +685,19 @@ class IRMAATier(StrictBaseModel):
     part_d_add: float = Field(ge=0.0)
 
 
+class IRMAAReconsiderationConfig(StrictBaseModel):
+    enabled: bool
+    event: LifeChangingEvent
+    use_current_year_magi: bool
+    apply_after_retirement: bool
+    override_conversion_guardrails: bool
+
+
 class IRMAAConfig(StrictBaseModel):
     lookback_years: int
     mfj: List[IRMAATier]
     single: List[IRMAATier]
+    reconsideration: IRMAAReconsiderationConfig
 
     @field_validator("lookback_years")
     @classmethod

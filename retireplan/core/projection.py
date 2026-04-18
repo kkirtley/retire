@@ -90,20 +90,7 @@ def project_scenario(
         mortgage_summary = mortgage_schedule.annual_summaries.get(year)
         lookback_year = year - scenario.medicare.irmaa.lookback_years
         lookback_tax = tax_history.get(lookback_year)
-        medicare_summary = calculate_medicare_summary(
-            scenario,
-            period,
-            lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
-            lookback_filing_status=filing_status_history.get(lookback_year),
-            previous_irmaa_tier=previous_irmaa_tier,
-        )
-        expenses = build_expenses(scenario, period, mortgage_summary)
-        expenses.update(
-            {
-                "medicare_part_b": medicare_summary.part_b_base + medicare_summary.irmaa_part_b,
-                "medicare_part_d": medicare_summary.part_d_base + medicare_summary.irmaa_part_d,
-            }
-        )
+        base_expenses = build_expenses(scenario, period, mortgage_summary)
         earned_income = {
             "husband": income["earned_income_husband"],
             "wife": income["earned_income_wife"],
@@ -117,30 +104,76 @@ def project_scenario(
             period.filing_status,
             balances_after_contributions,
         )
-        if strategy_execution.taxable_giving > 0:
-            expenses["charitable_giving"] = strategy_execution.taxable_giving
-
-        total_income = sum(income.values())
-        total_expenses = sum(expenses.values())
-        (
-            tax_summary,
-            withdrawals,
-            surplus_allocations,
-            net_cash_flow,
-            failed,
-            balances,
-        ) = _settle_period_cash_flow(
+        current_year_magi: float | None = None
+        expenses = dict(base_expenses)
+        tax_summary = calculate_tax_summary(
             scenario,
-            period,
             period.filing_status,
             income,
-            total_income,
-            total_expenses,
-            balances_after_contributions,
             strategy_execution.cash_withdrawals,
-            sum(strategy_execution.cash_withdrawals.values()),
-            strategy_execution.conversion_ordinary_income,
+            extra_ordinary_income=strategy_execution.conversion_ordinary_income,
         )
+        withdrawals: dict[str, float] = dict(strategy_execution.cash_withdrawals)
+        surplus_allocations: dict[str, float] = {}
+        net_cash_flow = 0.0
+        failed = 0
+        medicare_summary = calculate_medicare_summary(
+            scenario,
+            period,
+            lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
+            lookback_filing_status=filing_status_history.get(lookback_year),
+            previous_irmaa_tier=previous_irmaa_tier,
+        )
+        for _ in range(4):
+            expenses = dict(base_expenses)
+            expenses.update(
+                {
+                    "medicare_part_b": medicare_summary.part_b_base + medicare_summary.irmaa_part_b,
+                    "medicare_part_d": medicare_summary.part_d_base + medicare_summary.irmaa_part_d,
+                }
+            )
+            if strategy_execution.taxable_giving > 0:
+                expenses["charitable_giving"] = strategy_execution.taxable_giving
+
+            total_income = sum(income.values())
+            total_expenses = sum(expenses.values())
+            (
+                tax_summary,
+                withdrawals,
+                surplus_allocations,
+                net_cash_flow,
+                failed,
+                balances,
+            ) = _settle_period_cash_flow(
+                scenario,
+                period,
+                period.filing_status,
+                income,
+                total_income,
+                total_expenses,
+                balances_after_contributions,
+                strategy_execution.cash_withdrawals,
+                sum(strategy_execution.cash_withdrawals.values()),
+                strategy_execution.conversion_ordinary_income,
+            )
+            next_current_year_magi = tax_summary.adjusted_gross_income
+            next_medicare_summary = calculate_medicare_summary(
+                scenario,
+                period,
+                lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
+                lookback_filing_status=filing_status_history.get(lookback_year),
+                current_year_magi=next_current_year_magi,
+                current_year_filing_status=period.filing_status,
+                previous_irmaa_tier=previous_irmaa_tier,
+            )
+            if (
+                next_current_year_magi == current_year_magi
+                and next_medicare_summary == medicare_summary
+            ):
+                medicare_summary = next_medicare_summary
+                break
+            current_year_magi = next_current_year_magi
+            medicare_summary = next_medicare_summary
         if failed and failure_year is None:
             failure_year = year
 

@@ -124,11 +124,11 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert retirement_year.medicare == {
         "part_b_base": 4192.8,
         "part_d_base": 832.8,
-        "irmaa_part_b": 4192.8,
-        "irmaa_part_d": 756.0,
-        "total": 9974.4,
+        "irmaa_part_b": 1677.6,
+        "irmaa_part_d": 292.8,
+        "total": 6996.0,
         "covered_people": 2.0,
-        "irmaa_tier": 2.0,
+        "irmaa_tier": 1.0,
     }
     assert retirement_year.strategy == {
         "roth_conversion_total": 200000.0,
@@ -154,7 +154,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert retirement_year.net_cash_flow == 0.0
     assert retirement_year.withdrawals == {
         "Taxable Bridge Account": 40015.82,
-        "Household Operating Cash": 48164.71,
+        "Household Operating Cash": 45186.31,
     }
     assert retirement_year.surplus_allocations == {}
     assert retirement_year.rollovers == {
@@ -162,7 +162,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
         "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
     }
-    assert retirement_year.liquid_resources_end == 2469068.79
+    assert retirement_year.liquid_resources_end == 2472136.54
 
     assert final_year.year == 2067
     assert final_year.medicare == {
@@ -189,12 +189,12 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert final_year.mortgage["remaining_balance"] == 0.0
     assert final_year.withdrawals == {"Household Operating Cash": 26381.49}
     assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8372448.5
+    assert final_year.liquid_resources_end == 8398966.11
     assert final_year.alerts == (
         "Skipped 9832.96 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8372448.5,
+        "terminal_net_worth": 8398966.11,
         "total_taxes_paid": 533503.35,
         "total_roth_converted": 610813.77,
         "projected_rmds_by_year_total": 89958.81,
@@ -278,5 +278,5 @@ def test_bridge_surplus_only_restarts_after_age_seventy_transition():
     assert pre_retirement.surplus_allocations["Household Operating Cash"] == 175613.71
     assert bridge_spending_phase.contributions.get("Taxable Bridge Account", 0.0) == 0.0
     assert bridge_spending_phase.surplus_allocations == {}
-    assert post_transition.surplus_allocations["Taxable Bridge Account"] == 11106.37
+    assert post_transition.surplus_allocations["Taxable Bridge Account"] == 13076.77
     assert post_transition.surplus_allocations.get("Household Operating Cash", 0.0) == 0.0
