@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -28,7 +29,23 @@ def load_scenario(path: str | Path) -> ScenarioLoadResult:
 
     scenario_path = Path(path).expanduser().resolve()
     with scenario_path.open("r", encoding="utf-8") as handle:
-        payload = yaml.safe_load(handle)
+        text = handle.read()
+
+    return load_scenario_text(text, path_hint=scenario_path)
+
+
+def load_scenario_text(text: str, path_hint: str | Path | None = None) -> ScenarioLoadResult:
+    """Load a scenario from raw YAML text using the standard validation pipeline."""
+
+    payload = yaml.safe_load(text)
+    return load_scenario_payload(payload, path_hint=path_hint)
+
+
+def load_scenario_payload(
+    payload: Any,
+    path_hint: str | Path | None = None,
+) -> ScenarioLoadResult:
+    """Validate an already-parsed scenario payload and return diagnostics."""
 
     if not isinstance(payload, dict):
         raise ValueError("scenario YAML must contain a mapping at the document root")
@@ -36,8 +53,15 @@ def load_scenario(path: str | Path) -> ScenarioLoadResult:
     payload = _apply_shared_defaults(payload)
 
     scenario = RetirementScenario.model_validate(payload)
+    scenario_path = _normalize_path_hint(path_hint)
     warnings = _build_warnings(scenario_path, scenario)
     return ScenarioLoadResult(path=scenario_path, scenario=scenario, warnings=warnings)
+
+
+def _normalize_path_hint(path_hint: str | Path | None) -> Path:
+    if path_hint is None:
+        return Path("untitled_scenario.yaml")
+    return Path(path_hint).expanduser().resolve()
 
 
 def _apply_shared_defaults(payload: dict) -> dict:

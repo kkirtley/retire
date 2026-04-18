@@ -1,0 +1,182 @@
+"""Presentation helpers for the desktop UI."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from retireplan.core import ProjectionResult
+
+
+@dataclass(frozen=True)
+class UiTableModel:
+    columns: tuple[str, ...]
+    rows: tuple[tuple[object, ...], ...]
+
+
+@dataclass(frozen=True)
+class UiChartSeries:
+    name: str
+    points: tuple[tuple[int, float], ...]
+
+
+@dataclass(frozen=True)
+class UiChartModel:
+    title: str
+    kind: str
+    series: tuple[UiChartSeries, ...]
+
+
+@dataclass(frozen=True)
+class UiProjectionSnapshot:
+    scenario_name: str
+    version: str
+    warnings: tuple[str, ...]
+    summary_rows: tuple[tuple[str, str], ...]
+    results_table: UiTableModel
+    roth_planner_table: UiTableModel
+    irmaa_table: UiTableModel
+    charts: tuple[UiChartModel, ...]
+    raw_summary: dict[str, float | int | None]
+
+
+def build_ui_snapshot(
+    result: ProjectionResult,
+    reporting: dict[str, Any],
+    warnings: list[str] | tuple[str, ...],
+) -> UiProjectionSnapshot:
+    summary_rows = (
+        ("Scenario", f"{result.scenario_name} v{result.version}"),
+        ("Success", "Yes" if result.success else "No"),
+        ("Failure Year", _format_value(result.failure_year)),
+        (
+            "Terminal Net Worth",
+            _format_value(result.summary.get("terminal_net_worth")),
+        ),
+        (
+            "Total Taxes Paid",
+            _format_value(result.summary.get("total_taxes_paid")),
+        ),
+        (
+            "Total Roth Converted",
+            _format_value(result.summary.get("total_roth_converted")),
+        ),
+    )
+    return UiProjectionSnapshot(
+        scenario_name=result.scenario_name,
+        version=result.version,
+        warnings=tuple(warnings),
+        summary_rows=summary_rows,
+        results_table=_table_from_reporting(reporting["tables"]["yearly_overview"]),
+        roth_planner_table=_roth_planner_table(result),
+        irmaa_table=_irmaa_table(result),
+        charts=_charts_from_reporting(reporting["charts"]),
+        raw_summary=result.summary,
+    )
+
+
+def build_comparison_table(
+    primary: UiProjectionSnapshot,
+    comparison: UiProjectionSnapshot,
+) -> UiTableModel:
+    columns = ("metric", primary.scenario_name, comparison.scenario_name, "delta")
+    metrics = (
+        ("terminal_net_worth", "Terminal Net Worth"),
+        ("total_taxes_paid", "Total Taxes Paid"),
+        ("total_roth_converted", "Total Roth Converted"),
+        ("projected_rmds_by_year_total", "Projected RMDs"),
+        ("total_qcd", "Total QCD"),
+        ("total_given", "Total Given"),
+    )
+    rows = []
+    for key, label in metrics:
+        primary_value = primary.raw_summary.get(key)
+        comparison_value = comparison.raw_summary.get(key)
+        delta = None
+        if isinstance(primary_value, (int, float)) and isinstance(comparison_value, (int, float)):
+            delta = round(primary_value - comparison_value, 2)
+        rows.append(
+            (
+                label,
+                _format_value(primary_value),
+                _format_value(comparison_value),
+                _format_value(delta),
+            )
+        )
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _table_from_reporting(table: dict[str, Any]) -> UiTableModel:
+    columns = tuple(table["columns"])
+    rows = tuple(tuple(row[column] for column in columns) for row in table["rows"])
+    return UiTableModel(columns=columns, rows=rows)
+
+
+def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
+    columns = (
+        "year",
+        "husband_age",
+        "roth_conversion_total",
+        "conversion_tax_impact",
+        "conversion_tax_payment",
+        "conversion_tax_shortfall",
+    )
+    rows = []
+    for row in result.ledger:
+        if row.strategy.get("roth_conversion_total", 0.0) <= 0:
+            continue
+        rows.append(
+            (
+                row.year,
+                row.husband_age,
+                row.strategy.get("roth_conversion_total", 0.0),
+                row.strategy.get("conversion_tax_impact", 0.0),
+                row.strategy.get("conversion_tax_payment", 0.0),
+                row.strategy.get("conversion_tax_shortfall", 0.0),
+            )
+        )
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _irmaa_table(result: ProjectionResult) -> UiTableModel:
+    columns = ("year", "husband_age", "wife_age", "irmaa_tier", "alerts")
+    rows = []
+    for row in result.ledger:
+        irmaa_alerts = "; ".join(alert for alert in row.alerts if "IRMAA" in alert)
+        irmaa_tier = row.medicare.get("irmaa_tier", 0.0)
+        if irmaa_tier <= 0 and not irmaa_alerts:
+            continue
+        rows.append((row.year, row.husband_age, row.wife_age, irmaa_tier, irmaa_alerts))
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _charts_from_reporting(charts: dict[str, Any]) -> tuple[UiChartModel, ...]:
+    ordered = []
+    for chart in charts.values():
+        ordered.append(
+            UiChartModel(
+                title=chart["title"],
+                kind=chart["kind"],
+                series=tuple(
+                    UiChartSeries(
+                        name=series["name"],
+                        points=tuple(
+                            (int(point["year"]), float(point["value"]))
+                            for point in series["points"]
+                        ),
+                    )
+                    for series in chart["series"]
+                ),
+            )
+        )
+    return tuple(ordered)
+
+
+def _format_value(value: object) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, float):
+        return f"{value:,.2f}"
+    return str(value)

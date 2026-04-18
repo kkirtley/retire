@@ -24,7 +24,7 @@ def test_projection_runs_with_rich_scenario_shape():
     assert "remaining_balance" in result.ledger[0].mortgage
     assert result.ledger[0].income["earned_income_husband"] < 195000.0
     assert result.ledger[0].expenses["base_living"] < 120000.0
-    assert any("Stage 8 engine reporting outputs" in warning for warning in result.warnings)
+    assert any("Stage 9 desktop UI workflow" in warning for warning in result.warnings)
 
 
 def test_projection_matches_stage_7_baseline_checkpoints():

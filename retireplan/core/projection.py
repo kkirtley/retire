@@ -184,7 +184,7 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection covers Stage 8 engine reporting outputs; Stage 9 desktop UI and scenario-editing workflows remain in progress.",
+        "Projection covers the Stage 9 desktop UI workflow; SQLite persistence remains a later YAML-to-database follow-on.",
     ]
     return warnings
 

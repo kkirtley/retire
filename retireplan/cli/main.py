@@ -15,6 +15,7 @@ app = typer.Typer(help="Retirement planning tool for veteran households.")
 SCENARIO_ARGUMENT = typer.Argument(..., help="Path to YAML scenario file")
 OUTPUT_OPTION = typer.Option(Path("results/run.json"), help="Output file path")
 CHARTS_OPTION = typer.Option(Path("results/"), help="Charts output directory")
+COMPARE_OPTION = typer.Option(None, help="Optional comparison scenario path")
 
 
 @app.command()
@@ -70,6 +71,17 @@ def run(
     typer.echo(f"Charts directory written: {charts.resolve()}")
     if result.warnings:
         typer.echo(f"Warnings: {len(result.warnings)}")
+
+
+@app.command()
+def ui(
+    scenario_path: Path = SCENARIO_ARGUMENT,
+    compare: Path | None = COMPARE_OPTION,
+):
+    """Launch the desktop UI."""
+    from retireplan.ui.main import launch_ui
+
+    raise typer.Exit(launch_ui(scenario_path, compare))
 
 
 if __name__ == "__main__":

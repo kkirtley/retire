@@ -266,9 +266,27 @@ Outcome:
 
 ### Stage 9
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
+Plan:
+- Build a PySide6 desktop shell on top of the existing loader, engine, and reporting bundle rather than duplicating projection logic in the UI
+- Support YAML-first scenario editing directly in the desktop app, with validation and projection runs from the edited text buffer
+- Expose the Stage 8 reporting outputs through the required desktop tabs: Inputs, Results Table, Charts, Roth Conversion Planner, IRMAA Warnings, and Scenario Compare
+
+Delivered:
+- Added a dedicated `retireplan/ui` package with a PySide6 desktop application and window shell
+- Added an in-memory scenario loader path so the UI can validate and run projections from the current YAML editor contents without requiring a manual save first
+- Added the required Stage 9 tabs for inputs, yearly results, charts, Roth conversion planning, IRMAA warnings, and scenario comparison
+- Added a CLI `ui` command that launches the desktop application with an optional comparison scenario path
+- Added tests covering UI imports, editor-driven scenario loading, snapshot shaping for the UI, and the required tab layout
+
+Exit criteria:
+- The desktop UI calls the engine and reporting layer as libraries rather than duplicating business logic
+- Users can edit a scenario YAML document and run a projection from the desktop app
+- The required Stage 9 tabs are present and populated from projection and reporting outputs
+- Full repo checks remain green after UI integration
+
+Outcome:
 - PySide6 desktop UI over the engine library
-- Scenario editing workflow
-- SQLite persistence as a later follow-on after YAML-first stability
+- YAML-first scenario editing workflow
+- SQLite persistence remains a later v2 follow-on after YAML-first stability

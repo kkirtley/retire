@@ -12,3 +12,9 @@ def test_cli_imports():
     from retireplan.cli import main
 
     assert main.app is not None
+
+
+def test_ui_imports():
+    from retireplan.ui import RetirePlanWindow
+
+    assert RetirePlanWindow is not None

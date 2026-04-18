@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Kevin", email = "kevin@example.com" }]
-dependencies = ["pydantic>=2.0", "pyyaml>=6.0", "typer>=0.9.0"]
+dependencies = ["pydantic>=2.0", "pyyaml>=6.0", "typer>=0.9.0", "PySide6>=6.7"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "ruff>=0.1.0", "black>=23.0", "pre-commit>=3.0"]

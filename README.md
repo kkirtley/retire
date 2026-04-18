@@ -164,6 +164,7 @@ Implemented now:
 - Annual projection with taxes, mortgage cashflow, Medicare and IRMAA costs, survivor transitions, and yearly ledger output
 - Stage 7 withdrawal strategy support including Roth conversions, RMDs, QCDs, charitable-giving coordination, and top-level projection summaries
 - Stage 8 reporting exports including chart-ready series and CSV/JSON output artifacts from the CLI
+- Stage 9 PySide6 desktop UI with YAML-first scenario editing, results tabs, charts, Roth conversion planning, IRMAA review, and scenario comparison
 
 See `STAGE_TRACKER.md` for the persistent build-stage status.
 
@@ -179,6 +180,12 @@ retireplan validate scenarios/baseline_v1.0.1.yaml
 
 ```bash
 retireplan run scenarios/baseline_v1.0.1.yaml --out results/baseline_run.json --charts results/
+```
+
+### Launch Desktop UI
+
+```bash
+retireplan ui scenarios/baseline_v1.0.1.yaml --compare scenarios/baseline_v1.0.1.yaml
 ```
 
 This writes the main projection payload to `--out` and reporting artifacts to `--charts`, including:
@@ -199,6 +206,7 @@ retireplan/               # Main package
 │   └── main.py
 ├── core/                 # Projection engine (Stage 2+)
 ├── reporting/            # Reporting exports (Stage 8)
+├── ui/                   # Desktop UI (Stage 9)
 ├── tax/                  # Tax calculations (Stage 3+)
 ├── medicare/             # Medicare & IRMAA (Stage 6+)
 ├── mortgage/             # Mortgage amortization (Stage 4+)
