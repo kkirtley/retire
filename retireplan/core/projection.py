@@ -130,7 +130,7 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection applies Stage 4 mortgage and tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
+        "Projection applies Stage 5 income, survivor, mortgage, and tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
     ]
     return warnings
 

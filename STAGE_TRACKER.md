@@ -16,7 +16,7 @@ Status legend:
 | 2     | Complete | Deterministic annual projection engine                                   | Timeline-based annual periods, modular Stage 2 cashflow calculations, reusable timeline events, and golden ledger checkpoints are implemented; later-stage domains are still pending |
 | 3     | Complete | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                  |
 | 4     | Complete | Mortgage amortization and payoff solver                                  | Monthly amortization, payoff-by-age solving, annual mortgage ledger detail, and projection regression coverage are implemented and validated                                         |
-| 5     | Planned  | Social Security, VA, and survivor transitions                            | Scenario supports these rules; engine needs fuller transition logic                                                                                                                  |
+| 5     | Complete | Social Security, VA, and survivor transitions                            | Claim timing, COLA progression, survivor filing-status changes, expense stepdown, SS step-up, and VA survivor eligibility are implemented and covered by projection tests            |
 | 6     | Planned  | Medicare and IRMAA                                                       | YAML inputs exist; lookback and premium application are pending                                                                                                                      |
 | 7     | Planned  | Withdrawals, Roth conversions, RMDs, QCDs, giving                        | Strategy schema is present; operational engine logic is pending                                                                                                                      |
 | 8     | Planned  | Reporting tables and chart outputs                                       | Run output exists as JSON ledger; reporting layer is still pending                                                                                                                   |
@@ -139,12 +139,23 @@ Next stage:
 
 ### Stage 5
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
-- Social Security claim timing and COLA progression
-- VA benefit stop-at-death and survivor-benefit conditions
-- Survivor filing-status and expense-stepdown transitions
+Delivered:
+- Social Security claim timing and COLA progression in the annual income layer
+- Survivor Social Security step-up to the higher benefit after husband death and claim eligibility
+- VA disability stop after the modeled death year and conditional VA survivor benefit handling
+- Survivor filing-status transition to Single in the year after death
+- Survivor expense stepdown using the configured surviving-expense ratio
+- Projection tests covering survivor filing status, expense reduction, VA survivor eligibility, and Social Security survivor behavior
+
+Exit criteria:
+- Social Security claim timing and COLA progression are reflected in yearly income outputs
+- VA stop-at-death and survivor-benefit conditions are covered by tests
+- Survivor filing-status and expense-stepdown transitions are covered by tests
+
+Next stage:
+- Begin Stage 6 Medicare premiums, IRMAA lookback logic, and premium integration into annual cashflow
 
 ### Stage 6
 
