@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from retireplan.core import ProjectionResult
+from retireplan.mortgage import build_mortgage_schedule
 from retireplan.scenario import RetirementScenario
 
 
@@ -122,7 +123,7 @@ def build_ui_snapshot(
             excluded_columns=("husband_age", "wife_age"),
         ),
         activity_table=_activity_table(result),
-        mortgage_table=_mortgage_table(result),
+        mortgage_table=_mortgage_table(result, scenario),
         account_balances_table=account_balance_tables[0].table,
         account_balance_tables=account_balance_tables,
         roth_planner_table=_roth_planner_table(result),
@@ -247,10 +248,17 @@ def _activity_table(result: ProjectionResult) -> UiTableModel:
     return UiTableModel(columns=columns, rows=tuple(rows))
 
 
-def _mortgage_table(result: ProjectionResult) -> UiTableModel:
+def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> UiTableModel:
+    mortgage_schedule = build_mortgage_schedule(scenario)
+    monthly_payment = round(
+        float(scenario.mortgage.scheduled_payment_monthly)
+        + mortgage_schedule.extra_payment_monthly,
+        2,
+    )
     columns = (
         "year",
         "husband/wife ages",
+        "monthly_payment",
         "scheduled_payment",
         "extra_principal",
         "total_payment",
@@ -269,6 +277,7 @@ def _mortgage_table(result: ProjectionResult) -> UiTableModel:
             (
                 row.year,
                 _ages_label(row.husband_age, row.wife_age),
+                monthly_payment,
                 row.mortgage.get("scheduled_payment", 0.0),
                 row.mortgage.get("extra_principal", 0.0),
                 row.mortgage.get("total_payment", 0.0),

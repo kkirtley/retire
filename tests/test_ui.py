@@ -53,13 +53,14 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.activity_table.columns[4] == "roth_conversion_total"
     assert snapshot.mortgage_table.columns[0] == "year"
     assert snapshot.mortgage_table.columns[1] == "husband/wife ages"
-    assert snapshot.mortgage_table.columns[2] == "scheduled_payment"
+    assert snapshot.mortgage_table.columns[2] == "monthly_payment"
     assert snapshot.mortgage_table.columns[-1] == "remaining_balance"
     first_mortgage_row = snapshot.mortgage_table.rows[0]
     assert first_mortgage_row[0] == 2026
     assert first_mortgage_row[1] == "59 / 59"
-    assert first_mortgage_row[4] == 34200.0
-    assert first_mortgage_row[7] == 197204.58
+    assert first_mortgage_row[2] == 5700.0
+    assert first_mortgage_row[5] == 34200.0
+    assert first_mortgage_row[8] == 197204.58
     assert snapshot.account_balances_table.columns[0] == "year"
     assert snapshot.account_balances_table.columns[1] == "husband/wife ages"
     assert snapshot.account_balances_table.columns[2] == "surplus to Taxable Bridge Account"
