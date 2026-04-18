@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import date
 from pathlib import Path
 
 from retireplan.core import project_scenario
@@ -160,6 +161,7 @@ def test_conversion_tax_payment_uses_configured_source_order_before_general_with
 
 def test_conversion_tax_payment_shortfall_is_tracked_when_configured_sources_are_empty():
     scenario = _baseline_scenario()
+    scenario.simulation.start_date = date(2033, 1, 1)
     scenario.mortgage.enabled = False
     scenario.expenses.base_living.amount_annual = 0.0
     scenario.expenses.travel.amount_annual = 0.0
@@ -185,6 +187,7 @@ def test_conversion_tax_payment_shortfall_is_tracked_when_configured_sources_are
 
 def test_conversion_tax_payment_can_use_roth_assets_when_enabled():
     scenario = _baseline_scenario()
+    scenario.simulation.start_date = date(2033, 1, 1)
     scenario.mortgage.enabled = False
     scenario.expenses.base_living.amount_annual = 0.0
     scenario.expenses.travel.amount_annual = 0.0
@@ -211,6 +214,7 @@ def test_conversion_tax_payment_can_use_roth_assets_when_enabled():
 
 def test_conversion_tax_payment_can_gross_up_from_traditional_distribution():
     scenario = _baseline_scenario()
+    scenario.simulation.start_date = date(2033, 1, 1)
     scenario.mortgage.enabled = False
     scenario.expenses.base_living.amount_annual = 0.0
     scenario.expenses.travel.amount_annual = 0.0

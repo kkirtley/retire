@@ -152,7 +152,11 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     }
     assert retirement_year.expenses["mortgage_payment"] == 0.0
     assert retirement_year.net_cash_flow == 0.0
-    assert retirement_year.withdrawals == {"Taxable Bridge Account": 88180.53}
+    assert retirement_year.withdrawals == {
+        "Taxable Bridge Account": 40015.82,
+        "Household Operating Cash": 48164.71,
+    }
+    assert retirement_year.surplus_allocations == {}
     assert retirement_year.rollovers == {
         "Husband Traditional 401k -> Husband Traditional IRA": 170678.22,
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
@@ -183,7 +187,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     }
     assert final_year.taxes == {"federal": 3693.94, "state": 1304.65, "total": 4998.59}
     assert final_year.mortgage["remaining_balance"] == 0.0
-    assert final_year.withdrawals == {"Taxable Bridge Account": 26381.49}
+    assert final_year.withdrawals == {"Household Operating Cash": 26381.49}
     assert final_year.net_cash_flow == -0.0
     assert final_year.liquid_resources_end == 8372448.5
     assert final_year.alerts == (
@@ -256,3 +260,23 @@ def test_projection_can_roll_401k_balances_into_iras_at_retirement():
         "Rolled Husband roth 401k balances into Husband Roth IRA at retirement." == alert
         for alert in with_rollover_2033.alerts
     )
+
+
+def test_bridge_surplus_only_restarts_after_age_seventy_transition():
+    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
+    loaded = load_scenario(scenario_path)
+
+    result = project_scenario(loaded.scenario, loaded.warnings)
+    rows = {row.year: row for row in result.ledger}
+
+    pre_retirement = rows[2032]
+    bridge_spending_phase = rows[2033]
+    post_transition = rows[2037]
+
+    assert pre_retirement.contributions["Taxable Bridge Account"] == 48000.0
+    assert pre_retirement.surplus_allocations.get("Taxable Bridge Account", 0.0) == 0.0
+    assert pre_retirement.surplus_allocations["Household Operating Cash"] == 175613.71
+    assert bridge_spending_phase.contributions.get("Taxable Bridge Account", 0.0) == 0.0
+    assert bridge_spending_phase.surplus_allocations == {}
+    assert post_transition.surplus_allocations["Taxable Bridge Account"] == 11106.37
+    assert post_transition.surplus_allocations.get("Household Operating Cash", 0.0) == 0.0

@@ -285,7 +285,7 @@ def _account_balances_table(
     for row in result.ledger:
         surplus_values = ()
         if surplus_column:
-            surplus_values = (round(max(row.net_cash_flow, 0.0), 2),)
+            surplus_values = (row.surplus_allocations.get(surplus_destination, 0.0),)
         rows.append(
             (row.year, _ages_label(row.husband_age, row.wife_age))
             + surplus_values

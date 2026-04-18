@@ -36,6 +36,7 @@ class ProjectionRow:
     expenses: dict[str, float]
     mortgage: dict[str, float]
     contributions: dict[str, float]
+    surplus_allocations: dict[str, float]
     rollovers: dict[str, float]
     withdrawals: dict[str, float]
     alerts: tuple[str, ...]
@@ -121,8 +122,16 @@ def project_scenario(
 
         total_income = sum(income.values())
         total_expenses = sum(expenses.values())
-        tax_summary, withdrawals, net_cash_flow, failed, balances = _settle_period_cash_flow(
+        (
+            tax_summary,
+            withdrawals,
+            surplus_allocations,
+            net_cash_flow,
+            failed,
+            balances,
+        ) = _settle_period_cash_flow(
             scenario,
+            period,
             period.filing_status,
             income,
             total_income,
@@ -169,6 +178,7 @@ def project_scenario(
                 expenses=_rounded_values(expenses),
                 mortgage=_rounded_values(_mortgage_ledger_values(mortgage_summary)),
                 contributions=_rounded_values(contributions),
+                surplus_allocations=_rounded_values(surplus_allocations),
                 rollovers=_rounded_values(rollovers),
                 withdrawals=_rounded_values(withdrawals),
                 alerts=rollover_alerts + medicare_summary.alerts + strategy_execution.alerts,
@@ -199,6 +209,7 @@ def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
 
 def _settle_period_cash_flow(
     scenario: RetirementScenario,
+    period,
     filing_status: str,
     income: dict[str, float],
     total_income: float,
@@ -207,8 +218,9 @@ def _settle_period_cash_flow(
     base_withdrawals: dict[str, float],
     base_cash_inflows: float,
     extra_ordinary_income: float,
-) -> tuple[TaxSummary, dict[str, float], float, int, dict[str, float]]:
+) -> tuple[TaxSummary, dict[str, float], dict[str, float], float, int, dict[str, float]]:
     withdrawals: dict[str, float] = dict(base_withdrawals)
+    surplus_allocations: dict[str, float] = {}
     tax_summary = calculate_tax_summary(
         scenario,
         filing_status,
@@ -232,8 +244,14 @@ def _settle_period_cash_flow(
             total_income + base_cash_inflows - total_expenses - tax_summary.total_tax
         )
         trial_balances = dict(starting_balances)
-        extra_withdrawals, settled_net_cash_flow, failed = settle_net_cash_flow(
+        (
+            extra_withdrawals,
+            next_surplus_allocations,
+            settled_net_cash_flow,
+            failed,
+        ) = settle_net_cash_flow(
             scenario,
+            period,
             trial_balances,
             cash_flow_before_settlement,
         )
@@ -244,11 +262,20 @@ def _settle_period_cash_flow(
             )
         if next_withdrawals == withdrawals:
             final_balances = trial_balances
+            surplus_allocations = next_surplus_allocations
             break
         withdrawals = next_withdrawals
         final_balances = trial_balances
+        surplus_allocations = next_surplus_allocations
 
-    return tax_summary, withdrawals, settled_net_cash_flow, failed, final_balances
+    return (
+        tax_summary,
+        withdrawals,
+        surplus_allocations,
+        settled_net_cash_flow,
+        failed,
+        final_balances,
+    )
 
 
 def _rounded_values(values: dict[str, float]) -> dict[str, float]:

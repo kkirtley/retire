@@ -65,18 +65,63 @@ def apply_contributions(
 
 def settle_net_cash_flow(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     balances: dict[str, float],
     net_cash_flow: float,
-) -> tuple[dict[str, float], float, int]:
+) -> tuple[dict[str, float], dict[str, float], float, int]:
     withdrawals: dict[str, float] = {}
+    surplus_allocations: dict[str, float] = {}
     unmet_need = 0.0
     if net_cash_flow >= 0:
-        surplus_destination = scenario.contributions.surplus_allocation.destination_account
-        balances[surplus_destination] += net_cash_flow
-        return withdrawals, net_cash_flow, 0
+        surplus_destination = _surplus_destination_account(scenario, period)
+        if surplus_destination is not None:
+            balances[surplus_destination] += net_cash_flow
+            surplus_allocations[surplus_destination] = round(net_cash_flow, 2)
+        return withdrawals, surplus_allocations, net_cash_flow, 0
 
     withdrawals, unmet_need = withdraw_to_cover_deficit(scenario, balances, -net_cash_flow)
-    return withdrawals, net_cash_flow + sum(withdrawals.values()), int(unmet_need > 0)
+    return (
+        withdrawals,
+        surplus_allocations,
+        net_cash_flow + sum(withdrawals.values()),
+        int(unmet_need > 0),
+    )
+
+
+def _surplus_destination_account(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+) -> str | None:
+    configured_destination = scenario.contributions.surplus_allocation.destination_account
+    destination_account = next(
+        (account for account in scenario.accounts if account.name == configured_destination),
+        None,
+    )
+    if destination_account is None:
+        return configured_destination
+    if _account_accepts_surplus(destination_account, period):
+        return configured_destination
+    fallback_account = next(
+        (account for account in scenario.accounts if account.name == "Household Operating Cash"),
+        None,
+    )
+    if fallback_account is None:
+        return None
+    if fallback_account.contributions_enabled is False:
+        return None
+    return fallback_account.name
+
+
+def _account_accepts_surplus(account: Account, period: TimelinePeriod) -> bool:
+    if account.contributions_enabled is False:
+        return False
+    if account.purpose != "conversion_tax_funding":
+        return True
+    if not period.husband_retired:
+        return False
+    if account.purpose_transition is None:
+        return True
+    return period.husband_age >= account.purpose_transition.transition_age_husband
 
 
 def withdraw_to_cover_deficit(
