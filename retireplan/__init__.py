@@ -9,3 +9,7 @@ Version: 0.1.0
 """
 
 __version__ = "0.1.0"
+
+from retireplan.scenario import RetirementScenario
+
+__all__ = ["__version__", "RetirementScenario"]

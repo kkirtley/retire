@@ -1,79 +1,91 @@
-# ============================================================
-# Retirement Planning Baseline Scenario
-# Versioned, deterministic, local-first
-# ============================================================
-
 metadata:
   scenario_name: "baseline"
-  version: "1.0.1"
-  description: "Deterministic baseline retirement plan for veteran household"
-  created: "2026-01-16"
+  version: "1.1.0"
+  description: "Deterministic retirement planning baseline with adaptive Roth
+    conversion ladder, QCD giving engine, bridge account, mortgage payoff
+    targeting, and locked household assumptions"
+  created: "2026-04-17"
   currency: "USD"
   cadence: "annual"
 
-# ------------------------------------------------------------
-# GLOBAL ASSUMPTIONS
-# ------------------------------------------------------------
+simulation:
+  start_date: "2026-07-01"
+  retirement_date: "2033-01-01"
+  end_condition:
+    wife_age: 100
+  proration:
+    enabled: true
+    method: "daily"
+
 assumptions:
-  inflation_rate: 0.025 # 2.5% CPI
-  investment_return_default: 0.05 # 5.0% nominal annual return
-  success_age: 100 # Wife age; failure if resources exhausted before this
-  ss_cola: 0.02 # Long-run SSA COLA assumption (2.0%)
-  va_cola: 0.025 # VA COLA assumption (2.5%)
-  mo_effective_tax_rate: 0.04 # Missouri effective tax rate (approximation)
+  inflation_rate: 0.025
+  investment_return_default: 0.05
+  success_age: 100
+  ss_cola: 0.02
+  va_cola: 0.025
+  mo_effective_tax_rate: 0.04
   rmd_start_age: 75
 
-# ------------------------------------------------------------
-# HOUSEHOLD
-# ------------------------------------------------------------
+validation:
+  strict: true
+  override_merge_rules:
+    object_merge: "deep_merge"
+    list_merge: "replace_unless_keyed"
+
 household:
+  filing_status_initial: "mfj"
+  state_of_residence: "Missouri"
+
   husband:
     label: "Husband"
+    birth_month: 7
+    birth_year: 1967
     current_age: 58
-    retirement_age: 67
+    retirement_age: 65
     modeled_death:
       enabled: true
-      death_year: null # Set explicitly in scenario overrides (e.g., 2035)
+      death_year: null
+
   wife:
     label: "Wife"
+    birth_month: 2
+    birth_year: 1967
     current_age: 58
-    retirement_age: 67
+    retirement_age: 65
     modeled_death:
       enabled: false
       death_year: null
 
   expense_stepdown_after_husband_death:
     enabled: true
-    surviving_expense_ratio: 0.70 # 70% of prior household expenses
+    surviving_expense_ratio: 0.70
 
-# ------------------------------------------------------------
-# INCOME STREAMS
-# ------------------------------------------------------------
 income:
-  # ---------- Earned income (pre-retirement) ----------
   earned_income:
     husband:
       enabled: true
+      income_type: "w2"
       taxable: true
       annual_gross_salary_start: 195000.00
       annual_raise_rate: 0.02
-      start_age: 58
-      end_age: 67 # stops at retirement age
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
+
     wife:
       enabled: true
+      income_type: "1099"
       taxable: true
-      annual_gross_salary_start: 53000.00
+      annual_gross_salary_start: 60000.00
       annual_raise_rate: 0.02
-      start_age: 58
-      end_age: 67
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
 
-  # ---------- VA Disability ----------
   va_disability:
     owner: "Husband"
     amount_monthly: 4158.00
     taxable: false
     cola_rate: 0.025
-    start_age: 58
+    start_date: "2026-07-01"
     end_at_death: true
 
   va_survivor_benefit:
@@ -81,120 +93,186 @@ income:
     enabled: true
     conditional_start:
       husband_death_after: "2035-02-01"
-    amount_monthly: 0.00 # REQUIRED INPUT LATER – intentionally not guessed
+    amount_monthly: 1562.74
     taxable: false
     cola_rate: 0.025
 
-  # ---------- Social Security ----------
   social_security:
     husband:
-      claim_age: 67
-      amount_monthly_at_claim: 3800.00 # midpoint of 3700–3900 range (override as desired)
+      claim_age: 70
+      amount_monthly_at_claim: 5002.00
       cola_rate: 0.02
+
     wife:
-      claim_age: 67
+      claim_age: 65
       amount_monthly_at_claim: 1500.00
       cola_rate: 0.02
+
     survivor_rule:
       enabled: true
       step_up_to_higher_benefit: true
 
-# ------------------------------------------------------------
-# ACCOUNTS
-# ------------------------------------------------------------
+  pension_income:
+    wife_imrf:
+      enabled: true
+      owner: "Wife"
+      amount_monthly: 302.90
+      taxable: true
+      cola_rate: 0.00
+      start_date: "2026-07-01"
+
 accounts:
-  - name: "Husband Roth IRA"
-    owner: "Husband"
-    type: "roth"
-    starting_balance: 300000.00
-    return_rate: 0.05
-
   - name: "Husband Traditional IRA"
+    type: "traditional_ira"
     owner: "Husband"
-    type: "traditional"
-    starting_balance: 373000.00
+    starting_balance: 376000.00
+    return_rate: 0.05
+    return_schedule:
+      - start_date: "2026-07-01"
+        end_date: "2028-11-30"
+        annual_rate: 0.0675
+      - start_date: "2028-12-01"
+        annual_rate: 0.05
+
+  - name: "Husband Traditional 401k"
+    type: "traditional_401k"
+    owner: "Husband"
+    starting_balance: 6000.00
     return_rate: 0.05
 
-  # HSA: do NOT model contributions/withdrawals yet; keep as a static investment balance.
-  - name: "Household HSA (static)"
+  - name: "Husband Roth IRA"
+    type: "roth_ira"
+    owner: "Husband"
+    starting_balance: 305000.00
+    return_rate: 0.05
+
+  - name: "Husband Roth 401k"
+    type: "roth_401k"
+    owner: "Husband"
+    starting_balance: 0.00
+    return_rate: 0.05
+
+  - name: "Wife Traditional IRA"
+    type: "traditional_ira"
+    owner: "Wife"
+    starting_balance: 10000.00
+    return_rate: 0.05
+
+  - name: "Wife Roth IRA"
+    type: "roth_ira"
+    owner: "Wife"
+    starting_balance: 16000.00
+    return_rate: 0.05
+
+  - name: "Wife Traditional 401k"
+    type: "traditional_401k"
+    owner: "Wife"
+    starting_balance: 15700.00
+    return_rate: 0.05
+
+  - name: "Household HSA"
+    type: "hsa"
     owner: "Household"
-    type: "hsa_static"
     starting_balance: 5000.00
     return_rate: 0.05
     withdrawals_enabled: false
-    contributions_enabled: false
+    contributions_enabled: true
 
-  - name: "Wife Traditional IRA"
-    owner: "Wife"
-    type: "traditional"
+  - name: "Household Operating Cash"
+    type: "cash"
+    owner: "Household"
+    starting_balance: 0.00
+    return_rate: 0.03
+    withdrawals_enabled: true
+    contributions_enabled: true
+
+  - name: "Car Fund"
+    type: "restricted_cash"
+    owner: "Household"
     starting_balance: 20000.00
-    return_rate: 0.05
+    return_rate: 0.03
+    withdrawals_enabled: false
+    contributions_enabled: true
+    restriction: "never_use_for_retirement_model_cashflows"
 
-  - name: "Wife Roth 401k"
-    owner: "Wife"
-    type: "roth_401k"
-    starting_balance: 760.00
-    return_rate: 0.05
-
-  # Placeholder accounts for pre-tax 401(k) contributions (balances unknown/not provided yet)
-  - name: "Husband Roth 401k"
-    owner: "Husband"
-    type: "roth_401k"
+  - name: "Taxable Bridge Account"
+    type: "taxable"
+    owner: "Household"
     starting_balance: 0.00
-    return_rate: 0.05
+    return_rate: 0.03
+    purpose: "conversion_tax_funding"
+    purpose_transition:
+      transition_age_husband: 70
+      new_purpose: "growth_and_liquidity"
+    target_balance_at_age_65: 250000.00
+    target_balance_is_advisory: true
+    withdrawals_enabled: true
+    contributions_enabled: true
 
-  - name: "Husband Traditional 401k"
-    owner: "Husband"
-    type: "traditional_401k"
-    starting_balance: 0.00
-    return_rate: 0.05
-
-# ------------------------------------------------------------
-# CONTRIBUTIONS (Pre-retirement)
-# ------------------------------------------------------------
 contributions:
   enabled: true
+  surplus_allocation:
+    destination_account: "Taxable Bridge Account"
 
-  # Contributions apply from current age through the year before retirement age.
-  # Limits are not enforced in v1 unless you explicitly add a limits section; keep simple and deterministic.
   schedules:
-    - name: "Husband Roth 401k contribution"
+    - name: "Husband Traditional 401k employee"
       enabled: true
       owner: "Husband"
-      destination_account: "Husband Roth 401k"
+      destination_account: "Husband Traditional 401k"
       type: "percent_of_salary"
       percent: 0.06
-      start_age: 58
-      end_age: 67
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
 
-    - name: "Husband Traditional 401k contribution"
+    - name: "Husband 401k employer"
       enabled: true
       owner: "Husband"
       destination_account: "Husband Traditional 401k"
       type: "percent_of_salary"
       percent: 0.04
-      start_age: 58
-      end_age: 67
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
 
-    - name: "Wife Roth 401k contribution"
-      enabled: true
+    - name: "Wife Traditional 401k employee"
+      enabled: false
       owner: "Wife"
-      destination_account: "Wife Roth 401k"
+      destination_account: "Wife Traditional 401k"
       type: "percent_of_salary"
-      percent: 0.06
-      start_age: 58
-      end_age: 67
+      percent: 0.00
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
 
-  employer_match:
-    enabled: false
-    notes: "Employer match not provided; keep disabled unless user supplies details."
+    - name: "Household HSA contribution"
+      enabled: true
+      owner: "Household"
+      destination_account: "Household HSA"
+      type: "fixed_monthly"
+      amount_monthly: 200.00
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
 
-# ------------------------------------------------------------
-# EXPENSES
-# ------------------------------------------------------------
+    - name: "Car fund savings"
+      enabled: true
+      owner: "Household"
+      destination_account: "Car Fund"
+      type: "fixed_annual"
+      amount_annual: 10800.00
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
+
+    - name: "Taxable bridge funding"
+      enabled: true
+      owner: "Household"
+      destination_account: "Taxable Bridge Account"
+      type: "fixed_monthly"
+      amount_monthly: 4000.00
+      start_date: "2026-07-01"
+      end_date: "2032-12-31"
+      purpose: "conversion_tax_funding"
+
 expenses:
   base_living:
-    amount_annual: 120000.00 # $10,000/month
+    amount_annual: 120000.00
     inflation_rate: 0.025
 
   travel:
@@ -202,29 +280,43 @@ expenses:
     inflation_rate: 0.025
 
   housing:
-    property_tax_annual: 5000.00
-    homeowners_insurance_annual: 2500.00
-    inflation_rate: 0.025
+    property_tax:
+      amount_annual: 7000.00
+      start_date: "2026-07-01"
+      inflation_rate: 0.025
 
-# ------------------------------------------------------------
-# MORTGAGE (values fully specified for application use)
-# ------------------------------------------------------------
+    homeowners_insurance:
+      amount_annual: 2500.00
+      start_date: "2026-07-01"
+      inflation_rate: 0.025
+
+spending_guardrails:
+  enabled: true
+  base_spending_annual: 120000.00
+  floor_spending_annual: 60000.00
+  trigger:
+    type: "resource_pressure"
+
 mortgage:
   enabled: true
   starting_balance: 450000.00
   interest_rate: 0.055
   remaining_term_years: 15
-  payment_frequency: "monthly" # amortize monthly; aggregate to annual in results
+  scheduled_payment_monthly: 5700.00
+  payment_frequency: "monthly"
+
   payoff_by_age:
     enabled: true
-    target_age: 65 # HARD REQUIREMENT
+    target_age: 65
+    method: "compute_extra_principal"
 
-# ------------------------------------------------------------
-# TAXES – FEDERAL
-# ------------------------------------------------------------
+taxes:
+  conversion_tax_payment:
+    treatment: "annual_cash_outflow_same_year"
+
 federal_tax:
   standard_deduction:
-    mfj: 30000.00 # Placeholder – configurable
+    mfj: 30000.00
     single: 15000.00
 
   brackets:
@@ -246,50 +338,193 @@ federal_tax:
       - { rate: 0.35, up_to: 578125 }
       - { rate: 0.37, up_to: null }
 
-# ------------------------------------------------------------
-# MEDICARE + IRMAA
-# ------------------------------------------------------------
 medicare:
   start_age: 65
 
   part_b:
-    base_premium_monthly: 174.70 # placeholder; configurable
+    base_premium_monthly: 174.70
+
   part_d:
-    base_premium_monthly: 34.70 # placeholder; configurable
+    base_premium_monthly: 34.70
 
   irmaa:
     lookback_years: 2
     mfj:
-      - { magi_up_to: 206000, part_b_add: 0, part_d_add: 0 }
+      - { magi_up_to: 206000, part_b_add: 0.00, part_d_add: 0.00 }
       - { magi_up_to: 258000, part_b_add: 69.90, part_d_add: 12.20 }
       - { magi_up_to: 322000, part_b_add: 174.70, part_d_add: 31.50 }
       - { magi_up_to: 386000, part_b_add: 279.40, part_d_add: 50.70 }
       - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
 
     single:
-      - { magi_up_to: 103000, part_b_add: 0, part_d_add: 0 }
+      - { magi_up_to: 103000, part_b_add: 0.00, part_d_add: 0.00 }
       - { magi_up_to: 129000, part_b_add: 69.90, part_d_add: 12.20 }
       - { magi_up_to: 161000, part_b_add: 174.70, part_d_add: 31.50 }
       - { magi_up_to: 193000, part_b_add: 279.40, part_d_add: 50.70 }
       - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
 
-# ------------------------------------------------------------
-# WITHDRAWAL & CONVERSION STRATEGY
-# ------------------------------------------------------------
-withdrawal_strategy:
-  order:
-    - taxable
-    - traditional
-    - roth
-    - hsa_static
+strategy:
+  roth_conversions:
+    enabled: true
+    strategy: "adaptive_ladder"
 
-roth_conversions:
-  enabled: true
-  mode: "manual_or_bracket_fill"
-  max_marginal_bracket: 0.22 # Fill up to 22% by default
-  annual_schedule: [] # Optional explicit overrides by year/age
+    base_policy:
+      active_ages: [ 65, 66, 67, 68, 69 ]
+      base_conversion_amounts:
+        65: 140000.00
+        66: 130000.00
+        67: 115000.00
+        68: 100000.00
+        69: 100000.00
 
-# ------------------------------------------------------------
-# SCENARIO OVERRIDES (EMPTY FOR BASELINE)
-# ------------------------------------------------------------
+    tax_constraints:
+      max_marginal_bracket: 0.22
+      allow_partial_bracket_fill: true
+
+    irmaa_controls:
+      enabled: true
+      max_tier: 2
+      reduce_if_exceeded: true
+
+    market_adjustments:
+      enabled: true
+      rules:
+        - condition: "market_drawdown"
+          threshold: -0.15
+          action: "increase"
+          adjustment_percent: 0.25
+
+        - condition: "strong_market"
+          threshold: 0.12
+          action: "decrease"
+          adjustment_percent: 0.15
+
+    balance_targets:
+      enabled: true
+      traditional_ira_target_at_70: 150000.00
+      acceptable_band_percent: 0.33
+      target_priority: "higher_than_min_conversion"
+      allow_below_min_if_needed_to_hit_target: true
+      adjustment_logic:
+        if_above_target:
+          action: "increase"
+          adjustment_percent: 0.25
+        if_below_target:
+          action: "decrease"
+          adjustment_percent: 0.20
+
+    social_security_interaction:
+      reduce_after_husband_claim: true
+      reduction_percent: 0.75
+
+    safety_limits:
+      max_conversion: 200000.00
+      min_conversion:
+        type: "floor_with_tax_guard"
+        base: 100000.00
+        reduce_if_exceeds_bracket: true
+        enforce_only_when_target_not_at_risk: true
+
+    tax_payment:
+      enabled: true
+      payment_timing: "same_year"
+      estimated_tax_method: "incremental"
+      source_order:
+        - "taxable_bridge_account"
+        - "household_operating_cash"
+        - "taxable"
+        - "traditional_distribution"
+      source_account_name: "Taxable Bridge Account"
+      allow_roth_for_conversion_taxes: false
+      gross_up_conversion_if_needed: false
+      track_conversion_tax_separately: true
+      allow_bridge_for_living_expenses: true
+      prioritize_tax_use_first: true
+      use_bridge_for_living_only_if_absolutely_necessary: true
+
+  charitable_giving:
+    enabled: true
+    policy:
+      type: "greater_of"
+      percent_of_income: 0.10
+      compare_to: "rmd"
+      income_definition: "recurring_sources_only"
+      recurring_sources:
+        - "va_disability"
+        - "social_security"
+        - "pension_income"
+
+    qcd:
+      enabled: true
+      start_age: 70.5
+      annual_limit: 100000.00
+      applies_to:
+        - "traditional_ira"
+      tax_treatment:
+        reduces_rmd: true
+        excluded_from_taxable_income: true
+
+    coordination_rules:
+      apply_qcd_before_rmd_taxation: true
+      if_ira_insufficient_for_giving: "skip_excess_giving"
+      prohibit_other_accounts_for_giving: true
+
+  withdrawals:
+    order:
+      - "household_operating_cash"
+      - "taxable_bridge_account"
+      - "traditional_ira"
+      - "traditional_401k"
+      - "roth_ira"
+      - "roth_401k"
+
+    restrictions:
+      never_use_accounts:
+        - "Car Fund"
+
+    bridge_usage:
+      pre_age_70:
+        primary_use: "conversion_taxes"
+        secondary_use: "living_expenses_if_necessary"
+      post_age_70:
+        use_as: "growth_and_liquidity"
+
+    rmd_handling:
+      enforce: true
+      allow_qcd_to_satisfy_rmd: true
+      withdraw_remaining_rmd_if_needed: true
+
+  analytics:
+    required_outputs:
+      - "yearly_ledger"
+      - "account_balances_by_year"
+      - "taxes_by_year"
+      - "conversion_amount_by_year"
+      - "rmd_qcd_giving_by_year"
+      - "failure_year_if_any"
+      - "terminal_net_worth"
+      - "total_taxes_paid"
+      - "total_roth_converted"
+      - "traditional_ira_balance_at_70"
+
+    conversion_efficiency:
+      enabled: true
+      track:
+        - "taxes_paid_on_conversions"
+        - "estimated_future_tax_saved"
+        - "effective_conversion_rate"
+
+    rmd_projection:
+      enabled: true
+      track:
+        - "projected_rmds_by_year"
+        - "rmd_reduction_from_conversions"
+
+    charitable_tracking:
+      enabled: true
+      track:
+        - "total_given"
+        - "qcd_amounts"
+        - "taxable_giving"
+
 overrides: {}

@@ -1,6 +1,6 @@
 # RetirePlan
 
-Deterministic retirement planning engine for veteran households. Models VA income, Social Security, Medicare, taxes, and comprehensive financial projections through age 100.
+Deterministic, local-first retirement planning engine for a veteran household. The current codebase is organized around a rich YAML scenario model, a package-level scenario loader, and a staged projection engine that will expand capability area by area through the full retirement workflow.
 
 ## Requirements
 
@@ -153,18 +153,36 @@ To run hooks manually on all files:
 pre-commit run --all-files
 ```
 
+## Current Capability
+
+The current implementation uses the schema in `retireplan/schema/retirement.py` as the authoritative model and exposes it through the package for validation and projection work.
+
+Implemented now:
+- Schema-backed YAML loading and validation
+- CLI `validate` and `run` commands wired to the loader
+- Non-fatal scenario diagnostics for version/file mismatches and stale age data
+- Stage 2 annual cashflow projection with balances, basic income, expenses, contributions, withdrawals, timeline-driven proration, and ledger output
+
+Validated but not yet applied in projection math:
+- Federal and Missouri tax tables
+- Mortgage amortization and payoff-by-age solver
+- Medicare and IRMAA logic
+- Roth conversions, RMDs, QCDs, and charitable giving coordination
+
+See `STAGE_TRACKER.md` for the persistent build-stage status.
+
 ## CLI Commands
 
 ### Validate Scenario
 
 ```bash
-retireplan validate scenarios/baseline.yaml
+retireplan validate scenarios/baseline_v1.0.1.yaml
 ```
 
 ### Run Projection
 
 ```bash
-retireplan run scenarios/baseline.yaml --out results/baseline_run.json --charts results/
+retireplan run scenarios/baseline_v1.0.1.yaml --out results/baseline_run.json --charts results/
 ```
 
 ## Project Structure
@@ -211,26 +229,38 @@ All checks must pass before merging.
 
 ## Architecture
 
-RetirePlan follows a **local-first** design with:
+RetirePlan follows a local-first design with:
 
-- **No external data integration**: All calculations run offline
-- **Deterministic v1**: No Monte Carlo simulation (extensible for v2)
-- **Clean separation**: Core engine, tax module, account management, CLI
-- **Comprehensive testing**: Unit tests, golden tests, scenario validation
-- **YAML-based scenarios**: Versioned, human-readable configuration
+- No external financial data integration; all calculations run offline
+- Deterministic v1 projections; Monte Carlo remains out of scope for the first release
+- Schema-first scenario modeling with YAML as the current system of record
+- Clean separation between scenario I/O, timeline/projection logic, CLI, and later tax/Medicare/mortgage modules
+- Test-first delivery with scenario validation, behavioral tests, and stage-by-stage engine verification
+
+## Planning Direction
+
+The current planning direction combines the stage roadmap from `AGENTS.md` with the near-term implementation sequence in `plan.md`.
+
+Near-term work already folded into the direction of the app:
+- Keep `scenario_loader.py` as the entry point for YAML parsing, schema validation, and clean diagnostics
+- Expand validation tests around account references, contribution dates, conversion constraints, and bridge-account rules
+- Use `timeline_builder.py` as the transition boundary into later tax, Medicare, mortgage, and strategy modules so age milestones, proration windows, retirement transitions, and start/stop events stay explicit
+- Continue engine work in layers rather than mixing domains: balances/contributions/expenses first, then taxes, then mortgage, then conversions, then QCD/RMD/giving
 
 ### Build Stages
 
-- **Stage 0**: ✅ Project scaffolding, CI tooling
-- **Stage 1**: Data model + YAML loader + validation
-- **Stage 2**: Deterministic annual projection engine
-- **Stage 3**: Federal + Missouri taxes
-- **Stage 4**: Mortgage amortization + payoff solver
-- **Stage 5**: Social Security + VA income + survivor transitions
-- **Stage 6**: Medicare premiums + IRMAA thresholds
-- **Stage 7**: Withdrawal strategy + Roth conversions + RMDs
-- **Stage 8**: Reporting (tables + charts)
-- **Stage 9**: PySide6 UI + SQLite persistence
+- Stage 0: project scaffolding, packaging, linting, formatting, and CI workflow
+- Stage 1: authoritative schema, scenario loader, YAML validation, and diagnostics
+- Stage 2: deterministic annual ledger engine with timeline-based annual periods and current cashflow coverage
+- Stage 3: federal bracket-based tax engine plus Missouri effective-rate modeling
+- Stage 4: mortgage amortization, extra-principal solver, and housing cashflow detail
+- Stage 5: Social Security, VA, and survivor-transition rules
+- Stage 6: Medicare premiums, IRMAA tiers, and lookback logic
+- Stage 7: withdrawals, Roth conversions, RMDs, QCDs, and charitable giving coordination
+- Stage 8: reporting outputs, export-ready tables, and chart data
+- Stage 9: PySide6 desktop UI, scenario editing, and later SQLite persistence
+
+See `STAGE_TRACKER.md` for the live status and completion notes for each stage.
 
 ## License
 
