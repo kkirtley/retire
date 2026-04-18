@@ -10,6 +10,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QFileDialog,
     QGridLayout,
     QHeaderView,
@@ -36,6 +38,7 @@ from retireplan.ui.viewmodels import (
     UiTableModel,
     build_comparison_table,
     build_ui_snapshot,
+    transpose_table,
 )
 
 
@@ -58,12 +61,20 @@ class RetirePlanWindow(QMainWindow):
         self.inputs_warning_label = QLabel()
         self.summary_label = QLabel()
         self.results_table = QTableWidget()
+        self.account_balance_filter = QComboBox()
+        self.account_balance_transpose = QCheckBox("Transpose table")
+        self.account_balances_table = QTableWidget()
+        self.detail_year_filter = QComboBox()
+        self.detail_output = QPlainTextEdit()
         self.charts_tab = QTabWidget()
         self.roth_table = QTableWidget()
         self.irmaa_table = QTableWidget()
         self.compare_label = QLabel("Load a comparison scenario to populate this tab.")
         self.compare_table = QTableWidget()
         self.tabs = QTabWidget()
+        self._account_balance_tables: dict[str, UiTableModel] = {}
+        self._detail_json_by_year: dict[int, str] = {}
+        self._detail_summary_json = ""
 
         self._build_ui()
         self._wire_actions()
@@ -85,6 +96,7 @@ class RetirePlanWindow(QMainWindow):
         self.inputs_warning_label.setWordWrap(True)
         self.summary_label.setWordWrap(True)
         self.compare_label.setWordWrap(True)
+        self.detail_output.setReadOnly(True)
 
         inputs_widget = QWidget()
         inputs_layout = QVBoxLayout(inputs_widget)
@@ -95,6 +107,17 @@ class RetirePlanWindow(QMainWindow):
         results_layout = QVBoxLayout(results_widget)
         results_layout.addWidget(self.summary_label)
         results_layout.addWidget(self.results_table)
+
+        balances_widget = QWidget()
+        balances_layout = QVBoxLayout(balances_widget)
+        balances_layout.addWidget(self.account_balance_filter)
+        balances_layout.addWidget(self.account_balance_transpose)
+        balances_layout.addWidget(self.account_balances_table)
+
+        details_widget = QWidget()
+        details_layout = QVBoxLayout(details_widget)
+        details_layout.addWidget(self.detail_year_filter)
+        details_layout.addWidget(self.detail_output)
 
         charts_widget = QWidget()
         charts_layout = QVBoxLayout(charts_widget)
@@ -107,6 +130,8 @@ class RetirePlanWindow(QMainWindow):
 
         self.tabs.addTab(inputs_widget, "Inputs")
         self.tabs.addTab(results_widget, "Results Table")
+        self.tabs.addTab(balances_widget, "Account Balances")
+        self.tabs.addTab(details_widget, "Calculation Details")
         self.tabs.addTab(charts_widget, "Charts")
         self.tabs.addTab(self.roth_table, "Roth Conversion Planner")
         self.tabs.addTab(self.irmaa_table, "IRMAA Warnings")
@@ -158,9 +183,15 @@ class RetirePlanWindow(QMainWindow):
 
     def _wire_actions(self) -> None:
         self._configure_table(self.results_table)
+        self._configure_table(self.account_balances_table)
         self._configure_table(self.roth_table)
         self._configure_table(self.irmaa_table)
         self._configure_table(self.compare_table)
+        self.account_balance_filter.currentTextChanged.connect(
+            self._on_account_balance_filter_changed
+        )
+        self.account_balance_transpose.toggled.connect(self._refresh_account_balance_table)
+        self.detail_year_filter.currentTextChanged.connect(self._refresh_detail_output)
 
     def load_scenario_file(self, path: str | Path) -> None:
         scenario_path = Path(path).expanduser().resolve()
@@ -197,7 +228,7 @@ class RetirePlanWindow(QMainWindow):
             )
             result = project_scenario(loaded.scenario, loaded.warnings)
             reporting = build_reporting_bundle(result)
-            snapshot = build_ui_snapshot(result, reporting, loaded.warnings)
+            snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
 
             comparison_snapshot = None
             compare_text = self.compare_path_input.text().strip()
@@ -206,6 +237,7 @@ class RetirePlanWindow(QMainWindow):
                 compare_result = project_scenario(compare_loaded.scenario, compare_loaded.warnings)
                 compare_reporting = build_reporting_bundle(compare_result)
                 comparison_snapshot = build_ui_snapshot(
+                    compare_loaded.scenario,
                     compare_result,
                     compare_reporting,
                     compare_loaded.warnings,
@@ -229,6 +261,28 @@ class RetirePlanWindow(QMainWindow):
             "\n".join(f"{label}: {value}" for label, value in snapshot.summary_rows)
         )
         self._populate_table(self.results_table, snapshot.results_table)
+        self._account_balance_tables = {
+            item.name: item.table for item in snapshot.account_balance_tables
+        }
+        self.account_balance_filter.blockSignals(True)
+        self.account_balance_filter.clear()
+        self.account_balance_filter.addItems(list(self._account_balance_tables))
+        self.account_balance_filter.setCurrentText("All")
+        self.account_balance_filter.blockSignals(False)
+        self.account_balance_transpose.blockSignals(True)
+        self.account_balance_transpose.setChecked(False)
+        self.account_balance_transpose.blockSignals(False)
+        self._refresh_account_balance_table()
+        self._detail_summary_json = snapshot.detail_summary_json
+        self._detail_json_by_year = snapshot.detail_json_by_year
+        self.detail_year_filter.blockSignals(True)
+        self.detail_year_filter.clear()
+        self.detail_year_filter.addItem("Projection Summary")
+        for year in snapshot.detail_years:
+            self.detail_year_filter.addItem(str(year))
+        self.detail_year_filter.setCurrentText("Projection Summary")
+        self.detail_year_filter.blockSignals(False)
+        self._refresh_detail_output()
         self._populate_table(self.roth_table, snapshot.roth_planner_table)
         self._populate_table(self.irmaa_table, snapshot.irmaa_table)
         self._populate_charts(snapshot)
@@ -314,6 +368,30 @@ class RetirePlanWindow(QMainWindow):
         table.setSortingEnabled(False)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         table.horizontalHeader().setStretchLastSection(True)
+
+    def _on_account_balance_filter_changed(self, filter_name: str) -> None:
+        del filter_name
+        self._refresh_account_balance_table()
+
+    def _refresh_account_balance_table(self) -> None:
+        table = self._account_balance_tables.get(self.account_balance_filter.currentText())
+        if table is None:
+            return
+        if self.account_balance_transpose.isChecked():
+            table = transpose_table(table)
+        self._populate_table(self.account_balances_table, table)
+
+    def _refresh_detail_output(self) -> None:
+        selected = self.detail_year_filter.currentText()
+        if not selected or selected == "Projection Summary":
+            self.detail_output.setPlainText(self._detail_summary_json)
+            return
+        try:
+            year = int(selected)
+        except ValueError:
+            self.detail_output.setPlainText("")
+            return
+        self.detail_output.setPlainText(self._detail_json_by_year.get(year, ""))
 
     def _browse_scenario_file(self) -> None:
         selected_path, _ = QFileDialog.getOpenFileName(

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from retireplan.core import ProjectionResult
+from retireplan.scenario import RetirementScenario
 
 
 @dataclass(frozen=True)
@@ -34,13 +36,58 @@ class UiProjectionSnapshot:
     warnings: tuple[str, ...]
     summary_rows: tuple[tuple[str, str], ...]
     results_table: UiTableModel
+    account_balances_table: UiTableModel
+    account_balance_tables: tuple[UiNamedTable, ...]
     roth_planner_table: UiTableModel
     irmaa_table: UiTableModel
     charts: tuple[UiChartModel, ...]
+    detail_years: tuple[int, ...]
+    detail_json_by_year: dict[int, str]
+    detail_summary_json: str
     raw_summary: dict[str, float | int | None]
 
 
+@dataclass(frozen=True)
+class UiNamedTable:
+    name: str
+    table: UiTableModel
+
+
+def transpose_table(table: UiTableModel) -> UiTableModel:
+    if not table.columns:
+        return table
+
+    transposed_columns = (table.columns[0],) + tuple(str(row[0]) for row in table.rows)
+    transposed_rows = tuple(
+        (column_name,) + tuple(row[column_index] for row in table.rows)
+        for column_index, column_name in enumerate(table.columns[1:], start=1)
+    )
+    return UiTableModel(columns=transposed_columns, rows=transposed_rows)
+
+
+def _detail_json_by_year(result: ProjectionResult) -> dict[int, str]:
+    return {row.year: json.dumps(asdict(row), indent=2) for row in result.ledger}
+
+
+def _detail_summary_json(
+    result: ProjectionResult,
+    reporting: dict[str, Any],
+    warnings: list[str] | tuple[str, ...],
+) -> str:
+    payload = {
+        "scenario_name": result.scenario_name,
+        "version": result.version,
+        "success": result.success,
+        "failure_year": result.failure_year,
+        "warnings": list(warnings),
+        "summary": result.summary,
+        "reporting_summary": reporting["summary"],
+    }
+    return json.dumps(payload, indent=2)
+
+
 def build_ui_snapshot(
+    scenario: RetirementScenario,
     result: ProjectionResult,
     reporting: dict[str, Any],
     warnings: list[str] | tuple[str, ...],
@@ -62,15 +109,21 @@ def build_ui_snapshot(
             _format_value(result.summary.get("total_roth_converted")),
         ),
     )
+    account_balance_tables = _account_balance_tables(result, scenario)
     return UiProjectionSnapshot(
         scenario_name=result.scenario_name,
         version=result.version,
         warnings=tuple(warnings),
         summary_rows=summary_rows,
         results_table=_table_from_reporting(reporting["tables"]["yearly_overview"]),
+        account_balances_table=account_balance_tables[0].table,
+        account_balance_tables=account_balance_tables,
         roth_planner_table=_roth_planner_table(result),
         irmaa_table=_irmaa_table(result),
         charts=_charts_from_reporting(reporting["charts"]),
+        detail_years=tuple(row.year for row in result.ledger),
+        detail_json_by_year=_detail_json_by_year(result),
+        detail_summary_json=_detail_summary_json(result, reporting, warnings),
         raw_summary=result.summary,
     )
 
@@ -133,6 +186,60 @@ def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
                 row.strategy.get("conversion_tax_impact", 0.0),
                 row.strategy.get("conversion_tax_payment", 0.0),
                 row.strategy.get("conversion_tax_shortfall", 0.0),
+            )
+        )
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _account_balance_tables(
+    result: ProjectionResult,
+    scenario: RetirementScenario,
+) -> tuple[UiNamedTable, ...]:
+    if not result.ledger:
+        empty = UiTableModel(columns=("year",), rows=())
+        return (UiNamedTable(name="All", table=empty),)
+
+    owner_accounts: dict[str, tuple[str, ...]] = {}
+    for owner_name in ("Husband", "Wife", "Household"):
+        owner_accounts[owner_name] = tuple(
+            account.name
+            for account in scenario.accounts
+            if getattr(account.owner, "value", account.owner) == owner_name
+        )
+
+    grouped_tables = [UiNamedTable(name="All", table=_account_balances_table(result))]
+    for owner_name, account_names in owner_accounts.items():
+        if not account_names:
+            continue
+        grouped_tables.append(
+            UiNamedTable(
+                name=owner_name,
+                table=_account_balances_table(result, account_names),
+            )
+        )
+    return tuple(grouped_tables)
+
+
+def _account_balances_table(
+    result: ProjectionResult,
+    account_names: tuple[str, ...] | None = None,
+) -> UiTableModel:
+    if not result.ledger:
+        return UiTableModel(columns=("year",), rows=())
+
+    selected_account_names = (
+        tuple(result.ledger[0].account_balances_end.keys())
+        if account_names is None
+        else account_names
+    )
+    columns = ("year",) + selected_account_names
+    rows = []
+    for row in result.ledger:
+        rows.append(
+            (row.year,)
+            + tuple(
+                row.account_balances_end.get(account_name, 0.0)
+                for account_name in selected_account_names
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))

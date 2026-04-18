@@ -9,7 +9,11 @@ from retireplan.core import project_scenario
 from retireplan.io import load_scenario, load_scenario_text
 from retireplan.reporting import build_reporting_bundle
 from retireplan.ui import RetirePlanWindow
-from retireplan.ui.viewmodels import build_comparison_table, build_ui_snapshot
+from retireplan.ui.viewmodels import (
+    build_comparison_table,
+    build_ui_snapshot,
+    transpose_table,
+)
 
 
 def _app() -> QApplication:
@@ -37,13 +41,31 @@ def test_ui_snapshot_exposes_stage_9_views():
     result = project_scenario(loaded.scenario, loaded.warnings)
     reporting = build_reporting_bundle(result)
 
-    snapshot = build_ui_snapshot(result, reporting, loaded.warnings)
+    snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
     comparison = build_comparison_table(snapshot, snapshot)
 
     assert snapshot.results_table.columns[0] == "year"
+    assert snapshot.account_balances_table.columns[0] == "year"
+    assert "Husband Traditional IRA" in snapshot.account_balances_table.columns
+    assert [table.name for table in snapshot.account_balance_tables] == [
+        "All",
+        "Husband",
+        "Wife",
+        "Household",
+    ]
+    husband_table = next(
+        table.table for table in snapshot.account_balance_tables if table.name == "Husband"
+    )
+    transposed_husband_table = transpose_table(husband_table)
+    assert "Wife Traditional IRA" not in husband_table.columns
+    assert transposed_husband_table.columns[0] == "year"
+    assert transposed_husband_table.rows[0][0] == "Husband Traditional IRA"
     assert snapshot.roth_planner_table.columns[0] == "year"
     assert snapshot.irmaa_table.columns[0] == "year"
     assert len(snapshot.charts) == 4
+    assert snapshot.detail_years[0] == 2026
+    assert '"year": 2026' in snapshot.detail_json_by_year[2026]
+    assert '"summary":' in snapshot.detail_summary_json
     assert comparison.columns[0] == "metric"
 
 
@@ -52,7 +74,7 @@ def test_stage_9_window_exposes_required_tabs():
     loaded = _baseline_loaded()
     result = project_scenario(loaded.scenario, loaded.warnings)
     reporting = build_reporting_bundle(result)
-    snapshot = build_ui_snapshot(result, reporting, loaded.warnings)
+    snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
 
     window = RetirePlanWindow()
     window.apply_projection_snapshot(snapshot)
@@ -63,12 +85,29 @@ def test_stage_9_window_exposes_required_tabs():
     assert tab_labels == [
         "Inputs",
         "Results Table",
+        "Account Balances",
+        "Calculation Details",
         "Charts",
         "Roth Conversion Planner",
         "IRMAA Warnings",
         "Scenario Compare",
     ]
     assert window.results_table.rowCount() == len(snapshot.results_table.rows)
+    assert window.account_balances_table.rowCount() == len(snapshot.account_balances_table.rows)
+    assert window.account_balances_table.columnCount() == len(
+        snapshot.account_balances_table.columns
+    )
+    window.account_balance_filter.setCurrentText("Wife")
+    assert window.account_balances_table.columnCount() < len(
+        snapshot.account_balances_table.columns
+    )
+    wife_row_count = window.account_balances_table.rowCount()
+    wife_column_count = window.account_balances_table.columnCount()
+    window.account_balance_transpose.setChecked(True)
+    assert window.account_balances_table.columnCount() == wife_row_count + 1
+    assert window.account_balances_table.rowCount() == wife_column_count - 1
+    window.detail_year_filter.setCurrentText("2026")
+    assert '"year": 2026' in window.detail_output.toPlainText()
     assert window.charts_tab.count() == len(snapshot.charts)
 
     window.close()

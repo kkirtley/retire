@@ -1,6 +1,6 @@
 metadata:
   scenario_name: "baseline"
-  version: "1.1.0"
+  version: "1.0.1"
   description: "Deterministic retirement planning baseline with adaptive Roth
     conversion ladder, QCD giving engine, bridge account, mortgage payoff
     targeting, and locked household assumptions"
@@ -21,7 +21,7 @@ assumptions:
   inflation_rate: 0.025
   investment_return_default: 0.05
   success_age: 100
-  ss_cola: 0.02
+  ss_cola: 0.022
   va_cola: 0.025
   rmd_start_age: 75
 
@@ -43,13 +43,13 @@ household:
     retirement_age: 65
     modeled_death:
       enabled: true
-      death_year: null
+      death_year: 2038
 
   wife:
     label: "Wife"
     birth_month: 2
     birth_year: 1967
-    current_age: 58
+    current_age: 59
     retirement_age: 65
     modeled_death:
       enabled: false
@@ -100,12 +100,12 @@ income:
     husband:
       claim_age: 70
       amount_monthly_at_claim: 5002.00
-      cola_rate: 0.02
+      cola_rate: 0.025
 
     wife:
       claim_age: 65
       amount_monthly_at_claim: 1500.00
-      cola_rate: 0.02
+      cola_rate: 0.025
 
     survivor_rule:
       enabled: true
@@ -117,7 +117,7 @@ income:
       owner: "Wife"
       amount_monthly: 302.90
       taxable: true
-      cola_rate: 0.00
+      cola_rate: 0.025
       start_date: "2026-07-01"
 
 accounts:
@@ -271,35 +271,35 @@ contributions:
 
 expenses:
   base_living:
-    amount_annual: 120000.00
+    amount_annual: 90000.00
     inflation_rate: 0.025
 
   travel:
-    amount_annual: 5000.00
+    amount_annual: 2000.00
     inflation_rate: 0.025
 
   housing:
     property_tax:
       amount_annual: 7000.00
       start_date: "2026-07-01"
-      inflation_rate: 0.025
+      inflation_rate: 0.02
 
     homeowners_insurance:
       amount_annual: 2500.00
       start_date: "2026-07-01"
-      inflation_rate: 0.025
+      inflation_rate: 0.02
 
 spending_guardrails:
   enabled: true
-  base_spending_annual: 120000.00
+  base_spending_annual: 90000.00
   floor_spending_annual: 60000.00
   trigger:
     type: "resource_pressure"
 
 mortgage:
   enabled: true
-  starting_balance: 450000.00
-  interest_rate: 0.055
+  starting_balance: 225000.00
+  interest_rate: 0.06
   remaining_term_years: 15
   scheduled_payment_monthly: 5700.00
   payment_frequency: "monthly"

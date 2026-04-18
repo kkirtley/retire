@@ -112,14 +112,12 @@ def project_scenario(
 
         total_income = sum(income.values())
         total_expenses = sum(expenses.values())
-        total_contributions = sum(contributions.values())
         tax_summary, withdrawals, net_cash_flow, failed, balances = _settle_period_cash_flow(
             scenario,
             period.filing_status,
             income,
             total_income,
             total_expenses,
-            total_contributions,
             balances_after_contributions,
             strategy_execution.cash_withdrawals,
             sum(strategy_execution.cash_withdrawals.values()),
@@ -195,7 +193,6 @@ def _settle_period_cash_flow(
     income: dict[str, float],
     total_income: float,
     total_expenses: float,
-    total_contributions: float,
     starting_balances: dict[str, float],
     base_withdrawals: dict[str, float],
     base_cash_inflows: float,
@@ -222,11 +219,7 @@ def _settle_period_cash_flow(
             extra_ordinary_income=extra_ordinary_income,
         )
         cash_flow_before_settlement = (
-            total_income
-            + base_cash_inflows
-            - total_expenses
-            - total_contributions
-            - tax_summary.total_tax
+            total_income + base_cash_inflows - total_expenses - tax_summary.total_tax
         )
         trial_balances = dict(starting_balances)
         extra_withdrawals, settled_net_cash_flow, failed = settle_net_cash_flow(

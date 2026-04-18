@@ -14,8 +14,8 @@ def test_validate_command_reports_diagnostics():
     result = runner.invoke(app, ["validate", str(scenario_path)])
 
     assert result.exit_code == 0
-    assert "Scenario valid: baseline v1.1.0" in result.stdout
-    assert "Warning:" in result.stdout
+    assert "Scenario valid: baseline v1.0.1" in result.stdout
+    assert "Warnings: none" in result.stdout
 
 
 def test_run_command_writes_projection_file(tmp_path: Path):
@@ -32,8 +32,9 @@ def test_run_command_writes_projection_file(tmp_path: Path):
     assert output_path.exists()
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-    assert payload["scenario"]["version"] == "1.1.0"
-    assert payload["summary"]["terminal_net_worth"] > 0.0
+    assert payload["scenario"]["version"] == "1.0.1"
+    assert payload["summary"]["terminal_net_worth"] >= 0.0
+    assert payload["summary"]["failure_year_if_any"] is None
     assert payload["reporting"]["charts"]["total_liquid_net_worth"]["series"]
     assert "yearly_overview" in payload["report_exports"]["tables"]
     assert payload["ledger"]

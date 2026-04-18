@@ -1,4 +1,7 @@
-.PHONY: help install test lint format format-check pre clean venv
+.PHONY: help install test lint format format-check pre clean venv ui
+
+SCENARIO ?= scenarios/baseline_v1.0.1.yaml
+COMPARE ?=
 
 # Default target
 help:
@@ -14,6 +17,7 @@ help:
 	@echo "  make lint         Run ruff linter (ruff check .)"
 	@echo "  make format-check Run black formatter check"
 	@echo "  make format       Auto-format code with black"
+	@echo "  make ui           Launch desktop UI (override with SCENARIO=... COMPARE=...)"
 	@echo ""
 	@echo "Pre-commit:"
 	@echo "  make pre          Run ALL checks before pushing: lint + format-check + test"
@@ -58,6 +62,15 @@ format:
 	@echo "Auto-formatting code with black..."
 	. .venv/bin/activate && black .
 	@echo "✅ Code formatted"
+
+# Launch desktop UI
+ui:
+	@echo "Launching RetirePlan UI..."
+	@if [ -n "$(COMPARE)" ]; then \
+		. .venv/bin/activate && retireplan ui $(SCENARIO) --compare $(COMPARE); \
+	else \
+		. .venv/bin/activate && retireplan ui $(SCENARIO); \
+	fi
 
 # Pre-push: run all checks
 pre: lint format-check test
