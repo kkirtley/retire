@@ -478,4 +478,9 @@ strategy:
         - "qcd_amounts"
         - "taxable_giving"
 
+  account_rollovers:
+    enabled: true
+    roll_traditional_401k_to_ira: true
+    roll_roth_401k_to_ira: true
+
 overrides: {}

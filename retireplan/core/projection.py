@@ -17,7 +17,7 @@ from retireplan.core.strategy import conversion_tax_impact, execute_strategy
 from retireplan.core.timeline_builder import build_timeline
 from retireplan.medicare import calculate_medicare_summary
 from retireplan.mortgage import build_mortgage_schedule
-from retireplan.scenario import AccountType, RetirementScenario
+from retireplan.scenario import AccountOwner, AccountType, RetirementScenario
 from retireplan.tax import TaxSummary, calculate_tax_summary
 
 
@@ -73,9 +73,17 @@ def project_scenario(
     tax_history: dict[int, TaxSummary] = {}
     filing_status_history: dict[int, str] = {}
     previous_irmaa_tier: int | None = None
+    executed_rollovers: set[tuple[str, str]] = set()
 
     for period in build_timeline(scenario):
         year = period.year
+        rollover_alerts = _apply_retirement_account_rollovers(
+            scenario,
+            period.husband_retired,
+            period.wife_retired,
+            balances,
+            executed_rollovers,
+        )
         income = build_income(scenario, period)
         mortgage_summary = mortgage_schedule.annual_summaries.get(year)
         lookback_year = year - scenario.medicare.irmaa.lookback_years
@@ -161,7 +169,7 @@ def project_scenario(
                 mortgage=_rounded_values(_mortgage_ledger_values(mortgage_summary)),
                 contributions=_rounded_values(contributions),
                 withdrawals=_rounded_values(withdrawals),
-                alerts=medicare_summary.alerts + strategy_execution.alerts,
+                alerts=rollover_alerts + medicare_summary.alerts + strategy_execution.alerts,
                 net_cash_flow=round(net_cash_flow, 2),
                 account_balances_end=_rounded_values(balances),
                 liquid_resources_end=round(liquid_resources, 2),
@@ -243,6 +251,93 @@ def _settle_period_cash_flow(
 
 def _rounded_values(values: dict[str, float]) -> dict[str, float]:
     return {key: round(value, 2) for key, value in values.items()}
+
+
+def _apply_retirement_account_rollovers(
+    scenario: RetirementScenario,
+    husband_retired: bool,
+    wife_retired: bool,
+    balances: dict[str, float],
+    executed_rollovers: set[tuple[str, str]],
+) -> tuple[str, ...]:
+    config = scenario.strategy.account_rollovers
+    if not config.enabled:
+        return ()
+
+    alerts: list[str] = []
+    owner_retirement = (
+        (AccountOwner.HUSBAND, husband_retired),
+        (AccountOwner.WIFE, wife_retired),
+    )
+    for owner, retired in owner_retirement:
+        if not retired:
+            continue
+        if config.roll_traditional_401k_to_ira:
+            alert = _roll_account_balances(
+                scenario,
+                owner,
+                AccountType.TRADITIONAL_401K,
+                AccountType.TRADITIONAL_IRA,
+                balances,
+                executed_rollovers,
+            )
+            if alert is not None:
+                alerts.append(alert)
+        if config.roll_roth_401k_to_ira:
+            alert = _roll_account_balances(
+                scenario,
+                owner,
+                AccountType.ROTH_401K,
+                AccountType.ROTH_IRA,
+                balances,
+                executed_rollovers,
+            )
+            if alert is not None:
+                alerts.append(alert)
+    return tuple(alerts)
+
+
+def _roll_account_balances(
+    scenario: RetirementScenario,
+    owner: AccountOwner,
+    source_type: AccountType,
+    target_type: AccountType,
+    balances: dict[str, float],
+    executed_rollovers: set[tuple[str, str]],
+) -> str | None:
+    rollover_key = (owner.value, source_type.value)
+    if rollover_key in executed_rollovers:
+        return None
+
+    source_accounts = [
+        account
+        for account in scenario.accounts
+        if account.owner == owner and account.type == source_type
+    ]
+    if not source_accounts:
+        return None
+
+    target_account = next(
+        (
+            account
+            for account in scenario.accounts
+            if account.owner == owner and account.type == target_type
+        ),
+        None,
+    )
+    if target_account is None:
+        return None
+
+    rollover_total = round(sum(balances.get(account.name, 0.0) for account in source_accounts), 10)
+    executed_rollovers.add(rollover_key)
+    if rollover_total <= 0:
+        return None
+
+    balances[target_account.name] = round(balances[target_account.name] + rollover_total, 10)
+    for account in source_accounts:
+        balances[account.name] = 0.0
+
+    return f"Rolled {owner.value} {source_type.value.replace('_', ' ')} balances into {target_account.name} at retirement."
 
 
 def _mortgage_ledger_values(mortgage_summary) -> dict[str, float]:

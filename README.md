@@ -166,6 +166,18 @@ Implemented now:
 - Stage 8 reporting exports including chart-ready series and CSV/JSON output artifacts from the CLI
 - Stage 9 PySide6 desktop UI with YAML-first scenario editing, results tabs, charts, Roth conversion planning, IRMAA review, and scenario comparison
 
+Optional scenario simplification:
+
+```yaml
+strategy:
+	account_rollovers:
+		enabled: true
+		roll_traditional_401k_to_ira: true
+		roll_roth_401k_to_ira: true
+```
+
+When enabled, the engine rolls each retired owner's 401k balances into the first same-owner IRA of the matching tax type at retirement. The original 401k buckets remain in the ledger with zero balances so historical contributions and pre-retirement reporting still reconcile.
+
 See `STAGE_TRACKER.md` for the persistent build-stage status.
 
 ## CLI Commands

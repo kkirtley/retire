@@ -1,4 +1,7 @@
+from copy import deepcopy
 from pathlib import Path
+
+import pytest
 
 from retireplan.core import project_scenario
 from retireplan.io import load_scenario
@@ -167,31 +170,78 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "conversion_tax_payment": 0.0,
         "conversion_tax_shortfall": 0.0,
         "rmd_total": 3757.85,
-        "qcd_total": 0.0,
-        "taxable_rmd_total": 3757.85,
-        "charitable_giving_total": 0.0,
+        "qcd_total": 3757.85,
+        "taxable_rmd_total": 0.0,
+        "charitable_giving_total": 3757.85,
         "taxable_giving": 0.0,
     }
-    assert final_year.taxes == {"federal": 4528.18, "state": 1582.73, "total": 6110.91}
+    assert final_year.taxes == {"federal": 3693.94, "state": 1304.65, "total": 4998.59}
     assert final_year.mortgage["remaining_balance"] == 0.0
-    assert final_year.withdrawals == {
-        "Wife Traditional 401k": 3757.85,
-        "Taxable Bridge Account": 23735.96,
-    }
+    assert final_year.withdrawals == {"Taxable Bridge Account": 26381.49}
     assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8427059.05
+    assert final_year.liquid_resources_end == 8369380.21
     assert final_year.alerts == (
-        "Skipped 13590.81 of charitable giving because QCD-eligible IRA capacity was insufficient.",
+        "Skipped 9832.96 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8427059.05,
-        "total_taxes_paid": 529324.27,
+        "terminal_net_worth": 8369380.21,
+        "total_taxes_paid": 510613.17,
         "total_roth_converted": 556250.0,
         "projected_rmds_by_year_total": 89958.81,
-        "total_qcd": 26633.33,
-        "total_given": 26633.33,
-        "traditional_balance_at_husband_age_70": 279713.33,
+        "total_qcd": 89958.81,
+        "total_given": 89958.81,
+        "traditional_balance_at_husband_age_70": 279713.34,
         "failure_year_if_any": None,
     }
     assert result.failure_year is None
     assert result.success is True
+
+
+def test_projection_can_roll_401k_balances_into_iras_at_retirement():
+    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
+    base_scenario = load_scenario(scenario_path).scenario
+    base_scenario.strategy.roth_conversions.enabled = False
+    for account in base_scenario.accounts:
+        if account.name == "Husband Roth 401k":
+            account.starting_balance = 10000.0
+
+    rollover_scenario = deepcopy(base_scenario)
+    rollover_scenario.strategy.account_rollovers.enabled = True
+
+    without_rollover = project_scenario(base_scenario)
+    with_rollover = project_scenario(rollover_scenario)
+
+    without_rollover_2033 = next(row for row in without_rollover.ledger if row.year == 2033)
+    with_rollover_2033 = next(row for row in with_rollover.ledger if row.year == 2033)
+
+    assert with_rollover_2033.account_balances_end["Husband Traditional 401k"] == 0.0
+    assert with_rollover_2033.account_balances_end["Wife Traditional 401k"] == 0.0
+    assert with_rollover_2033.account_balances_end["Husband Roth 401k"] == 0.0
+    assert with_rollover_2033.account_balances_end["Husband Traditional IRA"] == pytest.approx(
+        without_rollover_2033.account_balances_end["Husband Traditional IRA"]
+        + without_rollover_2033.account_balances_end["Husband Traditional 401k"],
+        abs=0.02,
+    )
+    assert with_rollover_2033.account_balances_end["Wife Traditional IRA"] == pytest.approx(
+        without_rollover_2033.account_balances_end["Wife Traditional IRA"]
+        + without_rollover_2033.account_balances_end["Wife Traditional 401k"],
+        abs=0.02,
+    )
+    assert with_rollover_2033.account_balances_end["Husband Roth IRA"] == pytest.approx(
+        without_rollover_2033.account_balances_end["Husband Roth IRA"]
+        + without_rollover_2033.account_balances_end["Husband Roth 401k"],
+        abs=0.02,
+    )
+    assert any(
+        "Rolled Husband traditional 401k balances into Husband Traditional IRA at retirement."
+        == alert
+        for alert in with_rollover_2033.alerts
+    )
+    assert any(
+        "Rolled Wife traditional 401k balances into Wife Traditional IRA at retirement." == alert
+        for alert in with_rollover_2033.alerts
+    )
+    assert any(
+        "Rolled Husband roth 401k balances into Husband Roth IRA at retirement." == alert
+        for alert in with_rollover_2033.alerts
+    )

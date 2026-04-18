@@ -55,7 +55,7 @@ def test_projection_executes_roth_conversions_in_active_years():
     assert conversion_year.strategy["roth_conversion_total"] == 162500.0
     assert conversion_year.strategy["conversion_tax_impact"] == 30265.82
     assert conversion_year.account_balances_end["Husband Roth IRA"] == 610607.95
-    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 390011.06
+    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 569223.18
 
 
 def test_qcd_can_satisfy_rmd_before_taxable_distribution_when_conversions_disabled():

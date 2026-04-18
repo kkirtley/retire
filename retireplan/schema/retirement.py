@@ -911,11 +911,18 @@ class Analytics(StrictBaseModel):
     charitable_tracking: AnalyticsSubsection
 
 
+class AccountRollovers(StrictBaseModel):
+    enabled: bool = False
+    roll_traditional_401k_to_ira: bool = True
+    roll_roth_401k_to_ira: bool = True
+
+
 class StrategyConfig(StrictBaseModel):
     roth_conversions: RothConversions
     charitable_giving: CharitableGiving
     withdrawals: Withdrawals
     analytics: Analytics
+    account_rollovers: AccountRollovers = Field(default_factory=AccountRollovers)
 
 
 # ============================================================
@@ -1017,6 +1024,32 @@ class RetirementScenario(StrictBaseModel):
                     "when prohibit_other_accounts_for_giving is true, if_ira_insufficient_for_giving must be skip_excess_giving"
                 )
 
+    def _validate_account_rollovers(self) -> None:
+        rollovers = self.strategy.account_rollovers
+        if not rollovers.enabled:
+            return
+
+        for owner in (AccountOwner.HUSBAND, AccountOwner.WIFE):
+            owner_accounts = [account for account in self.accounts if account.owner == owner]
+            if (
+                rollovers.roll_traditional_401k_to_ira
+                and any(account.type == AccountType.TRADITIONAL_401K for account in owner_accounts)
+                and not any(
+                    account.type == AccountType.TRADITIONAL_IRA for account in owner_accounts
+                )
+            ):
+                raise ValueError(
+                    f"strategy.account_rollovers requires a traditional_ira target for {owner.value}"
+                )
+            if (
+                rollovers.roll_roth_401k_to_ira
+                and any(account.type == AccountType.ROTH_401K for account in owner_accounts)
+                and not any(account.type == AccountType.ROTH_IRA for account in owner_accounts)
+            ):
+                raise ValueError(
+                    f"strategy.account_rollovers requires a roth_ira target for {owner.value}"
+                )
+
     @model_validator(mode="after")
     def validate_cross_references(self) -> "RetirementScenario":
         account_names = {account.name for account in self.accounts}
@@ -1027,6 +1060,7 @@ class RetirementScenario(StrictBaseModel):
         self._validate_employment_dates()
         self._validate_withdrawal_strategy(account_names)
         self._validate_charitable_giving(account_names)
+        self._validate_account_rollovers()
 
         return self
 
