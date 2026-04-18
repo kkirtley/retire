@@ -37,6 +37,7 @@ class UiProjectionSnapshot:
     summary_rows: tuple[tuple[str, str], ...]
     results_table: UiTableModel
     activity_table: UiTableModel
+    mortgage_table: UiTableModel
     account_balances_table: UiTableModel
     account_balance_tables: tuple[UiNamedTable, ...]
     roth_planner_table: UiTableModel
@@ -121,6 +122,7 @@ def build_ui_snapshot(
             excluded_columns=("husband_age", "wife_age"),
         ),
         activity_table=_activity_table(result),
+        mortgage_table=_mortgage_table(result),
         account_balances_table=account_balance_tables[0].table,
         account_balance_tables=account_balance_tables,
         roth_planner_table=_roth_planner_table(result),
@@ -240,6 +242,39 @@ def _activity_table(result: ProjectionResult) -> UiTableModel:
                 row.strategy.get("conversion_tax_impact", 0.0),
                 row.strategy.get("conversion_tax_payment", 0.0),
                 "; ".join(row.alerts),
+            )
+        )
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _mortgage_table(result: ProjectionResult) -> UiTableModel:
+    columns = (
+        "year",
+        "husband/wife ages",
+        "scheduled_payment",
+        "extra_principal",
+        "total_payment",
+        "interest",
+        "principal",
+        "remaining_balance",
+    )
+    rows = []
+    for row in result.ledger:
+        if (
+            row.mortgage.get("total_payment", 0.0) <= 0.0
+            and row.mortgage.get("remaining_balance", 0.0) <= 0.0
+        ):
+            continue
+        rows.append(
+            (
+                row.year,
+                _ages_label(row.husband_age, row.wife_age),
+                row.mortgage.get("scheduled_payment", 0.0),
+                row.mortgage.get("extra_principal", 0.0),
+                row.mortgage.get("total_payment", 0.0),
+                row.mortgage.get("interest", 0.0),
+                row.mortgage.get("principal", 0.0),
+                row.mortgage.get("remaining_balance", 0.0),
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
