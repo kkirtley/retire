@@ -217,6 +217,11 @@ def test_projection_can_roll_401k_balances_into_iras_at_retirement():
     assert with_rollover_2033.account_balances_end["Husband Traditional 401k"] == 0.0
     assert with_rollover_2033.account_balances_end["Wife Traditional 401k"] == 0.0
     assert with_rollover_2033.account_balances_end["Husband Roth 401k"] == 0.0
+    assert with_rollover_2033.rollovers == {
+        "Husband Traditional 401k -> Husband Traditional IRA": 170678.22,
+        "Husband Roth 401k -> Husband Roth IRA": 13738.73,
+        "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
+    }
     assert with_rollover_2033.account_balances_end["Husband Traditional IRA"] == pytest.approx(
         without_rollover_2033.account_balances_end["Husband Traditional IRA"]
         + without_rollover_2033.account_balances_end["Husband Traditional 401k"],

@@ -31,6 +31,15 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
         "account_balances_stacked",
     }
     assert len(bundle["tables"]["yearly_overview"]["rows"]) == len(result.ledger)
+    assert bundle["tables"]["yearly_overview"]["columns"][1] == "husband/wife ages"
+    assert "rollover_total" in bundle["tables"]["yearly_overview"]["columns"]
+    assert "roth_conversion_total" in bundle["tables"]["yearly_overview"]["columns"]
+    retirement_row = next(
+        row for row in bundle["tables"]["yearly_overview"]["rows"] if row["year"] == 2033
+    )
+    assert retirement_row["husband/wife ages"] == "66 / 66"
+    assert retirement_row["rollover_total"] == 192248.03
+    assert retirement_row["roth_conversion_total"] == 162500.0
     assert bundle["charts"]["total_liquid_net_worth"]["series"][0]["points"][-1]["value"] == (
         result.summary["terminal_net_worth"]
     )

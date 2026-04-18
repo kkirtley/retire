@@ -61,12 +61,15 @@ def write_reporting_bundle(bundle: dict[str, Any], output_dir: Path) -> dict[str
 def _yearly_overview_table(result: ProjectionResult) -> dict[str, Any]:
     columns = [
         "year",
+        "husband/wife ages",
         "husband_age",
         "wife_age",
         "filing_status",
         "income_total",
         "expenses_total",
         "taxes_total",
+        "rollover_total",
+        "roth_conversion_total",
         "net_cash_flow",
         "liquid_resources_end",
         "success",
@@ -76,12 +79,15 @@ def _yearly_overview_table(result: ProjectionResult) -> dict[str, Any]:
         rows.append(
             {
                 "year": row.year,
+                "husband/wife ages": f"{row.husband_age} / {row.wife_age}",
                 "husband_age": row.husband_age,
                 "wife_age": row.wife_age,
                 "filing_status": row.filing_status,
                 "income_total": round(sum(row.income.values()), 2),
                 "expenses_total": round(sum(row.expenses.values()), 2),
                 "taxes_total": row.taxes.get("total", 0.0),
+                "rollover_total": round(sum(row.rollovers.values()), 2),
+                "roth_conversion_total": row.strategy.get("roth_conversion_total", 0.0),
                 "net_cash_flow": row.net_cash_flow,
                 "liquid_resources_end": row.liquid_resources_end,
                 "success": row.success,

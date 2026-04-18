@@ -36,6 +36,7 @@ class UiProjectionSnapshot:
     warnings: tuple[str, ...]
     summary_rows: tuple[tuple[str, str], ...]
     results_table: UiTableModel
+    activity_table: UiTableModel
     account_balances_table: UiTableModel
     account_balance_tables: tuple[UiNamedTable, ...]
     roth_planner_table: UiTableModel
@@ -116,6 +117,7 @@ def build_ui_snapshot(
         warnings=tuple(warnings),
         summary_rows=summary_rows,
         results_table=_table_from_reporting(reporting["tables"]["yearly_overview"]),
+        activity_table=_activity_table(result),
         account_balances_table=account_balance_tables[0].table,
         account_balance_tables=account_balance_tables,
         roth_planner_table=_roth_planner_table(result),
@@ -191,6 +193,41 @@ def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
     return UiTableModel(columns=columns, rows=tuple(rows))
 
 
+def _activity_table(result: ProjectionResult) -> UiTableModel:
+    columns = (
+        "year",
+        "husband/wife ages",
+        "rollover_total",
+        "rollovers",
+        "roth_conversion_total",
+        "conversion_tax_impact",
+        "conversion_tax_payment",
+        "alerts",
+    )
+    rows = []
+    for row in result.ledger:
+        rollover_total = round(sum(row.rollovers.values()), 2)
+        conversion_total = row.strategy.get("roth_conversion_total", 0.0)
+        if rollover_total <= 0 and conversion_total <= 0:
+            continue
+        rollovers = "; ".join(
+            f"{name}: {_format_value(amount)}" for name, amount in row.rollovers.items()
+        )
+        rows.append(
+            (
+                row.year,
+                _ages_label(row.husband_age, row.wife_age),
+                rollover_total,
+                rollovers,
+                conversion_total,
+                row.strategy.get("conversion_tax_impact", 0.0),
+                row.strategy.get("conversion_tax_payment", 0.0),
+                "; ".join(row.alerts),
+            )
+        )
+    return UiTableModel(columns=columns, rows=tuple(rows))
+
+
 def _account_balance_tables(
     result: ProjectionResult,
     scenario: RetirementScenario,
@@ -232,11 +269,11 @@ def _account_balances_table(
         if account_names is None
         else account_names
     )
-    columns = ("year",) + selected_account_names
+    columns = ("year", "husband/wife ages") + selected_account_names
     rows = []
     for row in result.ledger:
         rows.append(
-            (row.year,)
+            (row.year, _ages_label(row.husband_age, row.wife_age))
             + tuple(
                 row.account_balances_end.get(account_name, 0.0)
                 for account_name in selected_account_names
@@ -287,3 +324,7 @@ def _format_value(value: object) -> str:
     if isinstance(value, float):
         return f"{value:,.2f}"
     return str(value)
+
+
+def _ages_label(husband_age: int, wife_age: int) -> str:
+    return f"{husband_age} / {wife_age}"

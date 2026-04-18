@@ -61,6 +61,7 @@ class RetirePlanWindow(QMainWindow):
         self.inputs_warning_label = QLabel()
         self.summary_label = QLabel()
         self.results_table = QTableWidget()
+        self.activity_table = QTableWidget()
         self.account_balance_filter = QComboBox()
         self.account_balance_transpose = QCheckBox("Transpose table")
         self.account_balances_table = QTableWidget()
@@ -108,6 +109,10 @@ class RetirePlanWindow(QMainWindow):
         results_layout.addWidget(self.summary_label)
         results_layout.addWidget(self.results_table)
 
+        activity_widget = QWidget()
+        activity_layout = QVBoxLayout(activity_widget)
+        activity_layout.addWidget(self.activity_table)
+
         balances_widget = QWidget()
         balances_layout = QVBoxLayout(balances_widget)
         balances_layout.addWidget(self.account_balance_filter)
@@ -130,6 +135,7 @@ class RetirePlanWindow(QMainWindow):
 
         self.tabs.addTab(inputs_widget, "Inputs")
         self.tabs.addTab(results_widget, "Results Table")
+        self.tabs.addTab(activity_widget, "Retirement Activity")
         self.tabs.addTab(balances_widget, "Account Balances")
         self.tabs.addTab(details_widget, "Calculation Details")
         self.tabs.addTab(charts_widget, "Charts")
@@ -183,6 +189,7 @@ class RetirePlanWindow(QMainWindow):
 
     def _wire_actions(self) -> None:
         self._configure_table(self.results_table)
+        self._configure_table(self.activity_table)
         self._configure_table(self.account_balances_table)
         self._configure_table(self.roth_table)
         self._configure_table(self.irmaa_table)
@@ -261,6 +268,7 @@ class RetirePlanWindow(QMainWindow):
             "\n".join(f"{label}: {value}" for label, value in snapshot.summary_rows)
         )
         self._populate_table(self.results_table, snapshot.results_table)
+        self._populate_table(self.activity_table, snapshot.activity_table)
         self._account_balance_tables = {
             item.name: item.table for item in snapshot.account_balance_tables
         }

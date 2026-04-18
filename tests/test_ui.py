@@ -45,7 +45,12 @@ def test_ui_snapshot_exposes_stage_9_views():
     comparison = build_comparison_table(snapshot, snapshot)
 
     assert snapshot.results_table.columns[0] == "year"
+    assert snapshot.results_table.columns[1] == "husband/wife ages"
+    assert snapshot.activity_table.columns[0] == "year"
+    assert snapshot.activity_table.columns[1] == "husband/wife ages"
+    assert snapshot.activity_table.columns[4] == "roth_conversion_total"
     assert snapshot.account_balances_table.columns[0] == "year"
+    assert snapshot.account_balances_table.columns[1] == "husband/wife ages"
     assert "Husband Traditional IRA" in snapshot.account_balances_table.columns
     assert [table.name for table in snapshot.account_balance_tables] == [
         "All",
@@ -59,12 +64,14 @@ def test_ui_snapshot_exposes_stage_9_views():
     transposed_husband_table = transpose_table(husband_table)
     assert "Wife Traditional IRA" not in husband_table.columns
     assert transposed_husband_table.columns[0] == "year"
-    assert transposed_husband_table.rows[0][0] == "Husband Traditional IRA"
+    assert transposed_husband_table.rows[0][0] == "husband/wife ages"
+    assert transposed_husband_table.rows[1][0] == "Husband Traditional IRA"
     assert snapshot.roth_planner_table.columns[0] == "year"
     assert snapshot.irmaa_table.columns[0] == "year"
     assert len(snapshot.charts) == 4
     assert snapshot.detail_years[0] == 2026
     assert '"year": 2026' in snapshot.detail_json_by_year[2026]
+    assert '"rollovers": {' in snapshot.detail_json_by_year[2033]
     assert '"summary":' in snapshot.detail_summary_json
     assert comparison.columns[0] == "metric"
 
@@ -85,6 +92,7 @@ def test_stage_9_window_exposes_required_tabs():
     assert tab_labels == [
         "Inputs",
         "Results Table",
+        "Retirement Activity",
         "Account Balances",
         "Calculation Details",
         "Charts",
@@ -93,6 +101,7 @@ def test_stage_9_window_exposes_required_tabs():
         "Scenario Compare",
     ]
     assert window.results_table.rowCount() == len(snapshot.results_table.rows)
+    assert window.activity_table.rowCount() == len(snapshot.activity_table.rows)
     assert window.account_balances_table.rowCount() == len(snapshot.account_balances_table.rows)
     assert window.account_balances_table.columnCount() == len(
         snapshot.account_balances_table.columns
