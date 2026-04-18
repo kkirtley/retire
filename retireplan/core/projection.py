@@ -184,7 +184,7 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection applies Stage 7 withdrawal ordering, Roth conversion, RMD, and QCD logic; Stage 8 reporting outputs remain the primary area still in progress.",
+        "Projection covers Stage 8 engine reporting outputs; Stage 9 desktop UI and scenario-editing workflows remain in progress.",
     ]
     return warnings
 

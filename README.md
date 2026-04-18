@@ -163,6 +163,7 @@ Implemented now:
 - Non-fatal scenario diagnostics for version/file mismatches and stale age data
 - Annual projection with taxes, mortgage cashflow, Medicare and IRMAA costs, survivor transitions, and yearly ledger output
 - Stage 7 withdrawal strategy support including Roth conversions, RMDs, QCDs, charitable-giving coordination, and top-level projection summaries
+- Stage 8 reporting exports including chart-ready series and CSV/JSON output artifacts from the CLI
 
 See `STAGE_TRACKER.md` for the persistent build-stage status.
 
@@ -180,6 +181,14 @@ retireplan validate scenarios/baseline_v1.0.1.yaml
 retireplan run scenarios/baseline_v1.0.1.yaml --out results/baseline_run.json --charts results/
 ```
 
+This writes the main projection payload to `--out` and reporting artifacts to `--charts`, including:
+- `reporting.json`
+- `chart_series.json`
+- `yearly_overview.csv`
+- `cashflow.csv`
+- `tax_detail.csv`
+- `account_balances.csv`
+
 ## Project Structure
 
 ```
@@ -189,6 +198,7 @@ retireplan/               # Main package
 │   ├── __init__.py
 │   └── main.py
 ├── core/                 # Projection engine (Stage 2+)
+├── reporting/            # Reporting exports (Stage 8)
 ├── tax/                  # Tax calculations (Stage 3+)
 ├── medicare/             # Medicare & IRMAA (Stage 6+)
 ├── mortgage/             # Mortgage amortization (Stage 4+)

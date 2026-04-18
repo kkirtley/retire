@@ -34,5 +34,10 @@ def test_run_command_writes_projection_file(tmp_path: Path):
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario"]["version"] == "1.1.0"
     assert payload["summary"]["terminal_net_worth"] > 0.0
+    assert payload["reporting"]["charts"]["total_liquid_net_worth"]["series"]
+    assert "yearly_overview" in payload["report_exports"]["tables"]
     assert payload["ledger"]
     assert payload["warnings"]
+    assert (charts_path / "reporting.json").exists()
+    assert (charts_path / "chart_series.json").exists()
+    assert (charts_path / "yearly_overview.csv").exists()

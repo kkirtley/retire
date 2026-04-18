@@ -238,11 +238,31 @@ Outcome:
 
 ### Stage 8
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
+Plan:
+- Keep reporting as a pure post-processing layer over `ProjectionResult` so the engine and CLI can share one export path
+- Generate export-ready tables for yearly overview, cashflow, taxes, and account balances
+- Generate chart-ready series for liquid net worth, income versus expenses, taxes, and stacked account balances
+- Persist Stage 8 artifacts from the CLI `run` command into the requested charts directory as JSON and CSV files
+
+Delivered:
+- Added a dedicated `retireplan/reporting` package for Stage 8 reporting exports
+- Added report-bundle generation from `ProjectionResult`, including summary metadata, export-ready tables, and chart-ready series
+- Added filesystem export helpers that write `reporting.json`, `chart_series.json`, and CSV tables for yearly overview, cashflow, taxes, and account balances
+- Wired the CLI `run` command to embed reporting outputs in the main JSON payload and write reporting artifacts into the charts directory
+- Added tests covering the reporting bundle shape, reporting file exports, and CLI integration
+
+Exit criteria:
+- Engine-level reporting outputs are derived from projection results without duplicating business logic
+- Export-ready tables exist for balances, taxes, and cashflow
+- Chart-ready series exist for liquid net worth, income versus expenses, taxes, and account balances
+- Full repo checks remain green after reporting integration
+
+Outcome:
 - Engine-level reporting outputs
 - Export-ready tables and chart series for balances, taxes, and cashflow
+- Stage 8 is complete. Stage 9 desktop UI work is the next planned implementation target.
 
 ### Stage 9
 
