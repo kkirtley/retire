@@ -309,63 +309,10 @@ mortgage:
     target_age: 65
     method: "compute_extra_principal"
 
-taxes:
-  conversion_tax_payment:
-    treatment: "annual_cash_outflow_same_year"
-
-federal_tax:
-  standard_deduction:
-    mfj: 30000.00
-    single: 15000.00
-
-  brackets:
-    mfj:
-      - { rate: 0.10, up_to: 22000 }
-      - { rate: 0.12, up_to: 89450 }
-      - { rate: 0.22, up_to: 190750 }
-      - { rate: 0.24, up_to: 364200 }
-      - { rate: 0.32, up_to: 462500 }
-      - { rate: 0.35, up_to: 693750 }
-      - { rate: 0.37, up_to: null }
-
-    single:
-      - { rate: 0.10, up_to: 11000 }
-      - { rate: 0.12, up_to: 44725 }
-      - { rate: 0.22, up_to: 95375 }
-      - { rate: 0.24, up_to: 182100 }
-      - { rate: 0.32, up_to: 231250 }
-      - { rate: 0.35, up_to: 578125 }
-      - { rate: 0.37, up_to: null }
-
 state_tax:
   model: "effective_rate"
   taxable_income_basis: "federal_taxable_income"
   effective_rate: 0.04
-
-medicare:
-  start_age: 65
-
-  part_b:
-    base_premium_monthly: 174.70
-
-  part_d:
-    base_premium_monthly: 34.70
-
-  irmaa:
-    lookback_years: 2
-    mfj:
-      - { magi_up_to: 206000, part_b_add: 0.00, part_d_add: 0.00 }
-      - { magi_up_to: 258000, part_b_add: 69.90, part_d_add: 12.20 }
-      - { magi_up_to: 322000, part_b_add: 174.70, part_d_add: 31.50 }
-      - { magi_up_to: 386000, part_b_add: 279.40, part_d_add: 50.70 }
-      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
-
-    single:
-      - { magi_up_to: 103000, part_b_add: 0.00, part_d_add: 0.00 }
-      - { magi_up_to: 129000, part_b_add: 69.90, part_d_add: 12.20 }
-      - { magi_up_to: 161000, part_b_add: 174.70, part_d_add: 31.50 }
-      - { magi_up_to: 193000, part_b_add: 279.40, part_d_add: 50.70 }
-      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
 
 strategy:
   roth_conversions:

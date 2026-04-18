@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
+from importlib.resources import files
 from pathlib import Path
 
 import yaml
@@ -31,9 +33,33 @@ def load_scenario(path: str | Path) -> ScenarioLoadResult:
     if not isinstance(payload, dict):
         raise ValueError("scenario YAML must contain a mapping at the document root")
 
+    payload = _apply_shared_defaults(payload)
+
     scenario = RetirementScenario.model_validate(payload)
     warnings = _build_warnings(scenario_path, scenario)
     return ScenarioLoadResult(path=scenario_path, scenario=scenario, warnings=warnings)
+
+
+def _apply_shared_defaults(payload: dict) -> dict:
+    defaults_path = files("retireplan").joinpath("defaults/policy_defaults.yaml")
+    with defaults_path.open("r", encoding="utf-8") as handle:
+        defaults = yaml.safe_load(handle)
+
+    if defaults is None:
+        return payload
+    if not isinstance(defaults, dict):
+        raise ValueError("shared defaults YAML must contain a mapping at the document root")
+    return _deep_merge(defaults, payload)
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    merged = deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _build_warnings(path: Path, scenario: RetirementScenario) -> list[str]:

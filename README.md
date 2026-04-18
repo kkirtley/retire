@@ -161,12 +161,8 @@ Implemented now:
 - Schema-backed YAML loading and validation
 - CLI `validate` and `run` commands wired to the loader
 - Non-fatal scenario diagnostics for version/file mismatches and stale age data
-- Stage 2 annual cashflow projection with balances, basic income, expenses, contributions, withdrawals, timeline-driven proration, and ledger output
-
-Validated but not yet applied in projection math:
-- Mortgage amortization and payoff-by-age solver
-- Medicare and IRMAA logic
-- Roth conversions, RMDs, QCDs, and charitable giving coordination
+- Annual projection with taxes, mortgage cashflow, Medicare and IRMAA costs, survivor transitions, and yearly ledger output
+- Stage 7 withdrawal strategy support including Roth conversions, RMDs, QCDs, charitable-giving coordination, and top-level projection summaries
 
 See `STAGE_TRACKER.md` for the persistent build-stage status.
 

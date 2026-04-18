@@ -118,6 +118,7 @@ class ConversionTaxPaymentTiming(str, Enum):
 
 class EstimatedTaxMethod(str, Enum):
     INCREMENTAL = "incremental"
+    CONVERSION_ONLY = "conversion_only"
 
 
 class ConversionTaxSource(str, Enum):
@@ -234,6 +235,7 @@ class Assumptions(StrictBaseModel):
     ss_cola: float = Field(ge=0.0, le=1.0)
     va_cola: float = Field(ge=0.0, le=1.0)
     rmd_start_age: int
+    rmd_uniform_lifetime_table: Dict[int, float]
 
     @field_validator("rmd_start_age")
     @classmethod
@@ -241,6 +243,36 @@ class Assumptions(StrictBaseModel):
         if value not in {73, 75}:
             raise ValueError("rmd_start_age must be 73 or 75")
         return value
+
+    @field_validator("rmd_uniform_lifetime_table")
+    @classmethod
+    def validate_rmd_uniform_lifetime_table(cls, table: Dict[int, float]) -> Dict[int, float]:
+        if not table:
+            raise ValueError("rmd_uniform_lifetime_table must not be empty")
+
+        previous_age = -1
+        previous_factor: float | None = None
+        for age in sorted(table):
+            factor = table[age]
+            if age < 0:
+                raise ValueError("rmd_uniform_lifetime_table ages must be non-negative")
+            if factor <= 0:
+                raise ValueError("rmd_uniform_lifetime_table factors must be positive")
+            if age <= previous_age:
+                raise ValueError("rmd_uniform_lifetime_table ages must be strictly increasing")
+            if previous_factor is not None and factor >= previous_factor:
+                raise ValueError(
+                    "rmd_uniform_lifetime_table factors must decrease as ages increase"
+                )
+            previous_age = age
+            previous_factor = factor
+        return table
+
+    @model_validator(mode="after")
+    def validate_rmd_config(self) -> "Assumptions":
+        if self.rmd_start_age not in self.rmd_uniform_lifetime_table:
+            raise ValueError("rmd_uniform_lifetime_table must include the configured rmd_start_age")
+        return self
 
 
 # ============================================================

@@ -9,18 +9,18 @@ Status legend:
 
 ## Stage Summary
 
-| Stage | Status   | Scope                                                                    | Current Notes                                                                                                                                                                        |
-| ----- | -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0     | Complete | Repo scaffolding, packaging, linting, formatting, pytest, CLI entrypoint | `pyproject.toml`, `Makefile`, lint/format/test flow are active and passing                                                                                                           |
-| 1     | Complete | Schema model, YAML loader, validation, diagnostics                       | Loader is wired through the package and CLI; baseline scenario validates                                                                                                             |
-| 2     | Complete | Deterministic annual projection engine                                   | Timeline-based annual periods, modular Stage 2 cashflow calculations, reusable timeline events, and golden ledger checkpoints are implemented; later-stage domains are still pending |
-| 3     | Complete | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                  |
-| 4     | Complete | Mortgage amortization and payoff solver                                  | Monthly amortization, payoff-by-age solving, annual mortgage ledger detail, and projection regression coverage are implemented and validated                                         |
-| 5     | Complete | Social Security, VA, and survivor transitions                            | Claim timing, COLA progression, survivor filing-status changes, expense stepdown, SS step-up, and VA survivor eligibility are implemented and covered by projection tests            |
-| 6     | Complete | Medicare and IRMAA                                                       | Base premiums, 2-year IRMAA lookback, yearly Medicare expense lines, and IRMAA tier alerts are integrated and covered by unit and projection tests                                   |
-| 7     | Planned  | Withdrawals, Roth conversions, RMDs, QCDs, giving                        | Strategy schema is present; operational engine logic is pending                                                                                                                      |
-| 8     | Planned  | Reporting tables and chart outputs                                       | Run output exists as JSON ledger; reporting layer is still pending                                                                                                                   |
-| 9     | Planned  | Desktop UI and later SQLite persistence                                  | UI remains intentionally deferred until core engine stages stabilize                                                                                                                 |
+| Stage | Status      | Scope                                                                    | Current Notes                                                                                                                                                                                           |
+| ----- | ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete    | Repo scaffolding, packaging, linting, formatting, pytest, CLI entrypoint | `pyproject.toml`, `Makefile`, lint/format/test flow are active and passing                                                                                                                              |
+| 1     | Complete    | Schema model, YAML loader, validation, diagnostics                       | Loader is wired through the package and CLI; baseline scenario validates                                                                                                                                |
+| 2     | Complete    | Deterministic annual projection engine                                   | Timeline-based annual periods, modular Stage 2 cashflow calculations, reusable timeline events, and golden ledger checkpoints are implemented; later-stage domains are still pending                    |
+| 3     | Complete    | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                                     |
+| 4     | Complete    | Mortgage amortization and payoff solver                                  | Monthly amortization, payoff-by-age solving, annual mortgage ledger detail, and projection regression coverage are implemented and validated                                                            |
+| 5     | Complete    | Social Security, VA, and survivor transitions                            | Claim timing, COLA progression, survivor filing-status changes, expense stepdown, SS step-up, and VA survivor eligibility are implemented and covered by projection tests                               |
+| 6     | Complete    | Medicare and IRMAA                                                       | Base premiums, 2-year IRMAA lookback, yearly Medicare expense lines, and IRMAA tier alerts are integrated and covered by unit and projection tests                                                      |
+| 7     | In Progress | Withdrawals, Roth conversions, RMDs, QCDs, giving                        | Baseline Roth conversions, RMD/QCD execution, charitable spillover handling, shared policy defaults, and top-level strategy summaries are wired into the projection; advanced conversion tuning remains |
+| 8     | Planned     | Reporting tables and chart outputs                                       | Run output exists as JSON ledger; reporting layer is still pending                                                                                                                                      |
+| 9     | Planned     | Desktop UI and later SQLite persistence                                  | UI remains intentionally deferred until core engine stages stabilize                                                                                                                                    |
 
 ## Stage Detail
 
@@ -190,12 +190,51 @@ Next stage:
 
 ### Stage 7
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
-- Withdrawal ordering across account types
-- Roth conversion policy execution and tax funding behavior
-- RMD calculations, QCD application, and charitable giving coordination
+Plan:
+- Execute planned Stage 7 distributions before the legacy deficit-withdrawal loop so taxes and balances reflect RMDs, QCDs, and Roth conversions in the same annual pass
+- Keep RMD math data-driven through the scenario YAML instead of hardcoding a lifetime-factor table in Python
+- Add explicit yearly strategy ledger outputs for conversions, RMDs, QCDs, and charitable-giving amounts
+- Promote scenario-independent policy tables into shared defaults instead of duplicating them in household-specific YAML files
+- Preserve the existing Stage 6 baseline behavior where guardrails reduce or block conversions that would violate configured tax or IRMAA constraints
+
+Implementation tickets:
+- Ticket S7-1: configurable RMD factor table in schema and baseline scenario
+- Ticket S7-2: planned-distribution engine for RMDs, QCDs, charitable giving, and Roth conversions
+- Ticket S7-3: projection integration so planned distributions occur before deficit funding and are reflected in taxes
+- Ticket S7-4: regression tests for conversion income, Stage 7 baseline checkpoints, and QCD-driven RMD satisfaction
+- Ticket S7-5: shared defaults for scenario-independent policy tables and top-level strategy summaries
+- Ticket S7-6: advanced conversion tuning, broader charitable-giving spillover paths, and stage-completion cleanup
+
+Delivered so far:
+- Added YAML-driven `rmd_uniform_lifetime_table` validation in the scenario schema and populated the baseline scenario factors
+- Added a dedicated `retireplan/core/strategy.py` module for Stage 7 planned actions
+- Integrated baseline Roth conversions into the annual projection and tax loop, including guardrail-based reductions when tax or IRMAA constraints block the requested amount
+- Integrated RMD and QCD handling ahead of the deficit-withdrawal loop, with QCDs reducing taxable RMD exposure when traditional balances remain
+- Added yearly strategy ledger fields for Roth conversions, conversion tax impact, RMD totals, QCD totals, and charitable-giving amounts
+- Added a shared policy-defaults YAML layer in the loader so scenario-independent tables like the RMD uniform lifetime table no longer need to live in household baseline files
+- Expanded the shared defaults layer to cover Medicare default tables and federal tax defaults as well as RMD factors
+- Added top-level projection summary outputs for terminal net worth, taxes, conversions, projected RMD totals, QCD totals, giving totals, and traditional balances at husband age 70
+- Added explicit charitable-giving spillover handling and alerting when QCD capacity is insufficient but non-IRA funding is allowed
+- Added target-preserving Roth conversion caps and minimum-floor relaxation when preserving the age-70 traditional balance target takes priority
+- Added same-year conversion tax pre-funding from configured source order, including explicit tracking of funded tax cash versus any remaining shortfall
+- Added Roth-asset fallback funding for conversion taxes when explicitly enabled after configured source-order sources are exhausted
+- Added gross-up funding from traditional distributions so same-year conversion-tax shortfalls can be closed without relying on taxable cash buckets
+- Added a non-incremental `conversion_only` estimated-tax method for scenarios that want the conversion tax delta without tax-on-tax feedback from funding withdrawals
+- Added tests covering extra taxable ordinary income from conversions, Stage 7 baseline conversion behavior, and QCD satisfaction of RMDs in a controlled no-conversion scenario
+
+Decision on shared defaults:
+- No additional Stage 7 policy blocks are being moved into shared defaults right now; the remaining Roth-conversion and withdrawal settings are household strategy choices rather than shared regulatory defaults
+
+Exit criteria:
+- Roth conversion tuning honors the key Stage 7 controls: market adjustments, Social Security reduction, target-preserving balance caps, and minimum-conversion fallback behavior
+- RMD, QCD, and charitable-giving flows are visible in both yearly ledger rows and top-level summary outputs
+- Scenario-independent policy defaults needed for Stage 7 are supplied by the shared defaults layer rather than duplicated in the household baseline scenario
+- Full repo checks remain green after the Stage 7 implementation
+
+Outcome:
+- Stage 7 is complete. Stage 8 reporting outputs are the next planned implementation target.
 
 ### Stage 8
 

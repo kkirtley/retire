@@ -53,6 +53,7 @@ def run(
             "path": str(loaded.path),
         },
         "warnings": result.warnings,
+        "summary": result.summary,
         "success": result.success,
         "failure_year": result.failure_year,
         "ledger": [row.__dict__ for row in result.ledger],

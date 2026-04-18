@@ -36,6 +36,7 @@ def calculate_tax_summary(
     filing_status: str,
     income: dict[str, float],
     withdrawals: dict[str, float],
+    extra_ordinary_income: float = 0.0,
 ) -> TaxSummary:
     ordinary_income = round(
         income.get("earned_income_husband", 0.0)
@@ -44,6 +45,7 @@ def calculate_tax_summary(
         + _traditional_withdrawals(scenario, withdrawals),
         2,
     )
+    ordinary_income = round(ordinary_income + extra_ordinary_income, 2)
     social_security_benefits = round(
         income.get("social_security_husband", 0.0) + income.get("social_security_wife", 0.0),
         2,

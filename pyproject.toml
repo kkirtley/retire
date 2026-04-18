@@ -21,6 +21,9 @@ retireplan = "retireplan.cli.main:app"
 [tool.setuptools.packages.find]
 include = ["retireplan*"]
 
+[tool.setuptools.package-data]
+retireplan = ["defaults/*.yaml"]
+
 [tool.black]
 line-length = 100
 target-version = ["py312"]

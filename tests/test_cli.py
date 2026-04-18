@@ -33,5 +33,6 @@ def test_run_command_writes_projection_file(tmp_path: Path):
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario"]["version"] == "1.1.0"
+    assert payload["summary"]["terminal_net_worth"] > 0.0
     assert payload["ledger"]
     assert payload["warnings"]
