@@ -164,7 +164,6 @@ Implemented now:
 - Stage 2 annual cashflow projection with balances, basic income, expenses, contributions, withdrawals, timeline-driven proration, and ledger output
 
 Validated but not yet applied in projection math:
-- Federal and Missouri tax tables
 - Mortgage amortization and payoff-by-age solver
 - Medicare and IRMAA logic
 - Roth conversions, RMDs, QCDs, and charitable giving coordination
@@ -252,7 +251,7 @@ Near-term work already folded into the direction of the app:
 - Stage 0: project scaffolding, packaging, linting, formatting, and CI workflow
 - Stage 1: authoritative schema, scenario loader, YAML validation, and diagnostics
 - Stage 2: deterministic annual ledger engine with timeline-based annual periods and current cashflow coverage
-- Stage 3: federal bracket-based tax engine plus Missouri effective-rate modeling
+- Stage 3: federal bracket-based tax engine plus generic state income tax modeling
 - Stage 4: mortgage amortization, extra-principal solver, and housing cashflow detail
 - Stage 5: Social Security, VA, and survivor-transition rules
 - Stage 6: Medicare premiums, IRMAA tiers, and lookback logic

@@ -37,8 +37,13 @@ class FilingStatus(str, Enum):
     MFJ = "mfj"
 
 
-class StateOfResidence(str, Enum):
-    MISSOURI = "Missouri"
+class StateTaxModel(str, Enum):
+    NONE = "none"
+    EFFECTIVE_RATE = "effective_rate"
+
+
+class StateTaxableIncomeBasis(str, Enum):
+    FEDERAL_TAXABLE_INCOME = "federal_taxable_income"
 
 
 class IncomeType(str, Enum):
@@ -228,7 +233,6 @@ class Assumptions(StrictBaseModel):
     success_age: int = Field(ge=90)
     ss_cola: float = Field(ge=0.0, le=1.0)
     va_cola: float = Field(ge=0.0, le=1.0)
-    mo_effective_tax_rate: float = Field(ge=0.0, le=1.0)
     rmd_start_age: int
 
     @field_validator("rmd_start_age")
@@ -277,7 +281,7 @@ class ExpenseStepdownAfterHusbandDeath(StrictBaseModel):
 
 class Household(StrictBaseModel):
     filing_status_initial: FilingStatus
-    state_of_residence: StateOfResidence
+    state_of_residence: str = Field(min_length=1)
     husband: Person
     wife: Person
     expense_stepdown_after_husband_death: ExpenseStepdownAfterHusbandDeath
@@ -616,6 +620,24 @@ class FederalTaxConfig(StrictBaseModel):
     brackets: FederalBrackets
 
 
+class StateTaxConfig(StrictBaseModel):
+    model: StateTaxModel
+    taxable_income_basis: StateTaxableIncomeBasis = StateTaxableIncomeBasis.FEDERAL_TAXABLE_INCOME
+    effective_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_model_config(self) -> "StateTaxConfig":
+        if self.model == StateTaxModel.EFFECTIVE_RATE and self.effective_rate is None:
+            raise ValueError(
+                "state_tax.effective_rate is required when state_tax.model is effective_rate"
+            )
+        if self.model == StateTaxModel.NONE and self.effective_rate not in {None, 0.0}:
+            raise ValueError(
+                "state_tax.effective_rate must be omitted or zero when state_tax.model is none"
+            )
+        return self
+
+
 class PremiumConfig(StrictBaseModel):
     base_premium_monthly: float = Field(ge=0.0)
 
@@ -883,6 +905,7 @@ class RetirementScenario(StrictBaseModel):
     mortgage: MortgageConfig
     taxes: TaxesConfig
     federal_tax: FederalTaxConfig
+    state_tax: StateTaxConfig
     medicare: MedicareConfig
     strategy: StrategyConfig
     overrides: Dict[str, Any]

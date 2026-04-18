@@ -23,7 +23,6 @@ assumptions:
   success_age: 100
   ss_cola: 0.02
   va_cola: 0.025
-  mo_effective_tax_rate: 0.04
   rmd_start_age: 75
 
 validation:
@@ -337,6 +336,11 @@ federal_tax:
       - { rate: 0.32, up_to: 231250 }
       - { rate: 0.35, up_to: 578125 }
       - { rate: 0.37, up_to: null }
+
+state_tax:
+  model: "effective_rate"
+  taxable_income_basis: "federal_taxable_income"
+  effective_rate: 0.04
 
 medicare:
   start_age: 65

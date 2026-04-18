@@ -15,6 +15,7 @@ from retireplan.core.expenses import build_expenses
 from retireplan.core.income import build_income
 from retireplan.core.timeline_builder import build_timeline
 from retireplan.scenario import RetirementScenario
+from retireplan.tax import TaxSummary, calculate_tax_summary
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class ProjectionRow:
     wife_alive: bool
     filing_status: str
     income: dict[str, float]
+    taxes: dict[str, float]
     expenses: dict[str, float]
     contributions: dict[str, float]
     withdrawals: dict[str, float]
@@ -52,7 +54,7 @@ def project_scenario(
     scenario: RetirementScenario,
     scenario_warnings: Iterable[str] | None = None,
 ) -> ProjectionResult:
-    """Run a Stage 2 annual projection using the richer scenario file as input."""
+    """Run a Stage 3 annual projection using the richer scenario file as input."""
 
     balances = {account.name: float(account.starting_balance) for account in scenario.accounts}
     ledger: list[ProjectionRow] = []
@@ -73,8 +75,16 @@ def project_scenario(
         total_income = sum(income.values())
         total_expenses = sum(expenses.values())
         total_contributions = sum(contributions.values())
-        net_cash_flow = total_income - total_expenses - total_contributions
-        withdrawals, net_cash_flow, failed = settle_net_cash_flow(scenario, balances, net_cash_flow)
+        balances_after_contributions = dict(balances)
+        tax_summary, withdrawals, net_cash_flow, failed, balances = _settle_period_cash_flow(
+            scenario,
+            period.filing_status,
+            income,
+            total_income,
+            total_expenses,
+            total_contributions,
+            balances_after_contributions,
+        )
         if failed and failure_year is None:
             failure_year = year
 
@@ -92,6 +102,7 @@ def project_scenario(
                 wife_alive=period.wife_alive,
                 filing_status=period.filing_status,
                 income=_rounded_values(income),
+                taxes=_rounded_values(tax_summary.ledger_values()),
                 expenses=_rounded_values(expenses),
                 contributions=_rounded_values(contributions),
                 withdrawals=_rounded_values(withdrawals),
@@ -114,13 +125,48 @@ def project_scenario(
 
 def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     warnings = [
-        "Projection applies the richer scenario schema, but the engine is still Stage 2: taxes, Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are validated but not applied in cashflow results.",
+        "Projection applies Stage 3 tax modeling, but Medicare, IRMAA, RMDs, QCDs, and Roth conversion logic are still validated but not yet applied in cashflow results.",
     ]
     if scenario.mortgage.enabled:
         warnings.append(
             "Mortgage is currently modeled as scheduled annual payments only; amortization, extra principal solving, and payoff-by-age enforcement are not applied yet."
         )
     return warnings
+
+
+def _settle_period_cash_flow(
+    scenario: RetirementScenario,
+    filing_status: str,
+    income: dict[str, float],
+    total_income: float,
+    total_expenses: float,
+    total_contributions: float,
+    starting_balances: dict[str, float],
+) -> tuple[TaxSummary, dict[str, float], float, int, dict[str, float]]:
+    withdrawals: dict[str, float] = {}
+    tax_summary = calculate_tax_summary(scenario, filing_status, income, withdrawals)
+    final_balances = dict(starting_balances)
+    settled_net_cash_flow = 0.0
+    failed = 0
+
+    for _ in range(6):
+        tax_summary = calculate_tax_summary(scenario, filing_status, income, withdrawals)
+        cash_flow_before_settlement = (
+            total_income - total_expenses - total_contributions - tax_summary.total_tax
+        )
+        trial_balances = dict(starting_balances)
+        next_withdrawals, settled_net_cash_flow, failed = settle_net_cash_flow(
+            scenario,
+            trial_balances,
+            cash_flow_before_settlement,
+        )
+        if next_withdrawals == withdrawals:
+            final_balances = trial_balances
+            break
+        withdrawals = next_withdrawals
+        final_balances = trial_balances
+
+    return tax_summary, withdrawals, settled_net_cash_flow, failed, final_balances
 
 
 def _rounded_values(values: dict[str, float]) -> dict[str, float]:

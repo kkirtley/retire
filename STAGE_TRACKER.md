@@ -14,7 +14,7 @@ Status legend:
 | 0     | Complete | Repo scaffolding, packaging, linting, formatting, pytest, CLI entrypoint | `pyproject.toml`, `Makefile`, lint/format/test flow are active and passing                                                                                                           |
 | 1     | Complete | Schema model, YAML loader, validation, diagnostics                       | Loader is wired through the package and CLI; baseline scenario validates                                                                                                             |
 | 2     | Complete | Deterministic annual projection engine                                   | Timeline-based annual periods, modular Stage 2 cashflow calculations, reusable timeline events, and golden ledger checkpoints are implemented; later-stage domains are still pending |
-| 3     | Planned  | Federal and Missouri tax modeling                                        | YAML tax tables exist; engine integration is still pending                                                                                                                           |
+| 3     | Complete | Federal and state tax modeling                                           | Federal and generic state tax modules are integrated into the yearly ledger with withdrawal-aware settlement and tax coverage tests                                                  |
 | 4     | Planned  | Mortgage amortization and payoff solver                                  | Mortgage inputs exist; current engine treats mortgage as scheduled payments only                                                                                                     |
 | 5     | Planned  | Social Security, VA, and survivor transitions                            | Scenario supports these rules; engine needs fuller transition logic                                                                                                                  |
 | 6     | Planned  | Medicare and IRMAA                                                       | YAML inputs exist; lookback and premium application are pending                                                                                                                      |
@@ -68,16 +68,44 @@ Exit criteria met:
 - Timeline event hooks are ready for Stage 3 and later modules
 
 Next stage:
-- Begin Stage 3 tax modeling with a dedicated federal bracket engine, Missouri effective-rate approximation, and taxable-income composition tests
+- Begin Stage 4 mortgage amortization, payoff solver, and housing-cashflow integration work
 
 ### Stage 3
 
-Status: `Planned`
+Status: `Complete`
 
-Target deliverables:
-- Federal bracket-based tax engine using scenario tables
-- Missouri effective-rate tax approximation
-- Tests for deductions, brackets, filing-status changes, and taxable income composition
+Plan:
+- Create a dedicated `retireplan/tax/` package with pure tax-calculation functions before projection integration
+- Compute annual taxable income from currently implemented cashflow components only: earned income, pension, taxable Social Security approximation, and traditional-account withdrawals
+- Apply federal standard deduction and scenario-provided bracket tables using current filing status
+- Apply state tax through a generic state-tax configuration layer, with `none` and `effective_rate` models in Stage 3
+- Integrate tax outputs into each projection ledger row as separate values rather than burying them inside expenses
+- Resolve the cashflow/tax feedback loop by iterating withdrawals and taxes until the annual deficit settles
+
+Implementation tickets:
+- Ticket S3-1: federal bracket engine and standard-deduction handling
+- Ticket S3-2: Social Security taxable-benefit approximation for MFJ and Single
+- Ticket S3-3: generic state-tax summary with `none` and `effective_rate` models
+- Ticket S3-4: projection integration with iterative withdrawal-aware tax settlement
+- Ticket S3-5: unit and projection tests covering deductions, filing-status changes, and taxable-income composition
+
+Delivered:
+- Tax package scaffold under `retireplan/tax/`
+- Federal bracket calculation using scenario tax tables
+- Generic state-tax calculation keyed off the configured current state and model
+- Tax summary integration into yearly projection rows
+- Projection cashflow settlement updated to account for tax-driven withdrawal feedback
+- Dedicated tests for federal tax, taxable Social Security, traditional-withdrawal taxation, and filing-status handling
+- Baseline projection regression updated for tax-aware behavior, including current failure-year detection under the baseline assumptions
+
+Exit criteria:
+- `ProjectionRow` includes separate federal and state tax outputs
+- Taxable income composition is covered by tests for the currently implemented income and withdrawal types
+- Filing-status changes affect both standard deduction selection and bracket selection
+- Full repo checks remain green after tax integration
+
+Follow-up notes:
+- Add Roth conversions, RMDs, and other later-stage taxable flows when those engine stages are implemented
 
 ### Stage 4
 
