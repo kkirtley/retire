@@ -176,24 +176,35 @@ def _table_from_reporting(
 def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
     columns = (
         "year",
-        "husband_age",
+        "husband/wife ages",
         "roth_conversion_total",
         "conversion_tax_impact",
         "conversion_tax_payment",
         "conversion_tax_shortfall",
+        "irmaa_tier",
+        "medicare_total",
+        "planner_notes",
     )
     rows = []
     for row in result.ledger:
         if row.strategy.get("roth_conversion_total", 0.0) <= 0:
             continue
+        planner_notes = "; ".join(
+            alert
+            for alert in row.alerts
+            if "IRMAA" in alert or "conversion" in alert or "traditional balance target" in alert
+        )
         rows.append(
             (
                 row.year,
-                row.husband_age,
+                _ages_label(row.husband_age, row.wife_age),
                 row.strategy.get("roth_conversion_total", 0.0),
                 row.strategy.get("conversion_tax_impact", 0.0),
                 row.strategy.get("conversion_tax_payment", 0.0),
                 row.strategy.get("conversion_tax_shortfall", 0.0),
+                row.medicare.get("irmaa_tier", 0.0),
+                row.medicare.get("total", 0.0),
+                planner_notes,
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))

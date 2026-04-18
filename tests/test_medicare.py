@@ -87,13 +87,10 @@ def test_projection_adds_medicare_costs_and_irmaa_alerts():
     assert medicare_start.expenses["medicare_part_b"] > 0.0
     assert medicare_start.expenses["medicare_part_d"] > 0.0
     assert "IRMAA tier changed from 0 to 2 based on 2030 MAGI." in medicare_start.alerts
-    assert reconsideration_year.medicare["irmaa_tier"] == 1.0
+    assert reconsideration_year.medicare["irmaa_tier"] == 0.0
     assert (
-        "IRMAA tier changed from 2 to 1 based on current-year MAGI via work_stoppage reconsideration."
+        "IRMAA tier changed from 2 to 0 based on current-year MAGI via work_stoppage reconsideration."
         in reconsideration_year.alerts
     )
     assert irmaa_reset_year.medicare["irmaa_tier"] == 0.0
-    assert (
-        "IRMAA tier changed from 1 to 0 based on current-year MAGI via work_stoppage reconsideration."
-        in irmaa_reset_year.alerts
-    )
+    assert not any("IRMAA tier changed" in alert for alert in irmaa_reset_year.alerts)

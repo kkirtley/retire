@@ -321,7 +321,7 @@ medicare:
       event: "work_stoppage"
       use_current_year_magi: true
       apply_after_retirement: true
-      override_conversion_guardrails: true
+      override_conversion_guardrails: false
 
 strategy:
   roth_conversions:
@@ -378,7 +378,7 @@ strategy:
       reduction_percent: 0.75
 
     safety_limits:
-      max_conversion: 200000.00
+      max_conversion: 160000.00
       min_conversion:
         type: "floor_with_tax_guard"
         base: 100000.00

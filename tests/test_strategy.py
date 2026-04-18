@@ -53,10 +53,10 @@ def test_projection_executes_roth_conversions_in_active_years():
     by_year = {row.year: row for row in result.ledger}
     conversion_year = by_year[2033]
 
-    assert conversion_year.strategy["roth_conversion_total"] == 200000.0
-    assert conversion_year.strategy["conversion_tax_impact"] == 40015.82
-    assert conversion_year.account_balances_end["Husband Roth IRA"] == 665851.19
-    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 529848.18
+    assert conversion_year.strategy["roth_conversion_total"] == 160000.0
+    assert conversion_year.strategy["conversion_tax_impact"] == 29615.82
+    assert conversion_year.account_balances_end["Husband Roth IRA"] == 623851.19
+    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 571848.18
 
 
 def test_qcd_can_satisfy_rmd_before_taxable_distribution_when_conversions_disabled():
@@ -144,6 +144,7 @@ def test_conversion_tax_payment_uses_configured_source_order_before_general_with
     scenario.expenses.housing.homeowners_insurance.amount_annual = 0.0
     scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
     scenario.strategy.roth_conversions.irmaa_controls.enabled = False
+    scenario.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
     scenario.strategy.roth_conversions.tax_payment.source_order = ["household_operating_cash"]
     for account in scenario.accounts:
         if account.name == "Household Operating Cash":
@@ -169,6 +170,7 @@ def test_conversion_tax_payment_shortfall_is_tracked_when_configured_sources_are
     scenario.expenses.housing.homeowners_insurance.amount_annual = 0.0
     scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
     scenario.strategy.roth_conversions.irmaa_controls.enabled = False
+    scenario.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
     scenario.strategy.roth_conversions.tax_payment.source_order = ["household_operating_cash"]
     for account in scenario.accounts:
         if account.name == "Household Operating Cash":
@@ -195,6 +197,7 @@ def test_conversion_tax_payment_can_use_roth_assets_when_enabled():
     scenario.expenses.housing.homeowners_insurance.amount_annual = 0.0
     scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
     scenario.strategy.roth_conversions.irmaa_controls.enabled = False
+    scenario.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
     scenario.strategy.roth_conversions.tax_payment.source_order = ["household_operating_cash"]
     scenario.strategy.roth_conversions.tax_payment.allow_roth_for_conversion_taxes = True
     for account in scenario.accounts:
@@ -222,6 +225,7 @@ def test_conversion_tax_payment_can_gross_up_from_traditional_distribution():
     scenario.expenses.housing.homeowners_insurance.amount_annual = 0.0
     scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
     scenario.strategy.roth_conversions.irmaa_controls.enabled = False
+    scenario.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
     scenario.strategy.roth_conversions.tax_payment.source_order = ["household_operating_cash"]
     scenario.strategy.roth_conversions.tax_payment.gross_up_conversion_if_needed = True
     for account in scenario.accounts:
@@ -248,6 +252,7 @@ def test_conversion_only_tax_method_skips_tax_on_tax_feedback():
     incremental.expenses.housing.homeowners_insurance.amount_annual = 0.0
     incremental.strategy.roth_conversions.tax_constraints.max_marginal_bracket = 0.37
     incremental.strategy.roth_conversions.irmaa_controls.enabled = False
+    incremental.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
     incremental.strategy.roth_conversions.tax_payment.source_order = ["traditional_distribution"]
     for account in incremental.accounts:
         if account.name == "Household Operating Cash":
@@ -287,6 +292,7 @@ def test_retirement_irmaa_override_can_relax_conversion_guardrails():
     scenario.strategy.roth_conversions.irmaa_controls.enabled = True
     scenario.strategy.roth_conversions.irmaa_controls.reduce_if_exceeded = True
     scenario.strategy.roth_conversions.irmaa_controls.max_tier = 0
+    scenario.strategy.roth_conversions.safety_limits.max_conversion = 200000.0
 
     without_override = deepcopy(scenario)
     without_override.medicare.irmaa.reconsideration.override_conversion_guardrails = False

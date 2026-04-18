@@ -39,7 +39,7 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
     )
     assert retirement_row["husband/wife ages"] == "66 / 66"
     assert retirement_row["rollover_total"] == 200491.27
-    assert retirement_row["roth_conversion_total"] == 200000.0
+    assert retirement_row["roth_conversion_total"] == 160000.0
     assert bundle["charts"]["total_liquid_net_worth"]["series"][0]["points"][-1]["value"] == (
         result.summary["terminal_net_worth"]
     )
