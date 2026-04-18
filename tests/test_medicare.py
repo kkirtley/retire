@@ -57,7 +57,7 @@ def test_projection_adds_medicare_costs_and_irmaa_alerts():
 
     pre_medicare = rows[2031]
     medicare_start = rows[2032]
-    irmaa_reset_year = rows[2035]
+    irmaa_reset_year = rows[2038]
 
     assert pre_medicare.medicare["total"] == 0.0
     assert medicare_start.medicare["covered_people"] == 2.0
@@ -65,4 +65,4 @@ def test_projection_adds_medicare_costs_and_irmaa_alerts():
     assert medicare_start.expenses["medicare_part_d"] > 0.0
     assert "IRMAA tier changed from 0 to 2 based on 2030 MAGI." in medicare_start.alerts
     assert irmaa_reset_year.medicare["irmaa_tier"] == 0.0
-    assert "IRMAA tier changed from 2 to 0 based on 2033 MAGI." in irmaa_reset_year.alerts
+    assert "IRMAA tier changed from 1 to 0 based on 2036 MAGI." in irmaa_reset_year.alerts

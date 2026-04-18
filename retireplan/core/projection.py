@@ -380,7 +380,8 @@ def _build_summary(
         traditional_accounts = {
             account.name
             for account in scenario.accounts
-            if account.type in {AccountType.TRADITIONAL_IRA, AccountType.TRADITIONAL_401K}
+            if account.owner == AccountOwner.HUSBAND
+            and account.type in {AccountType.TRADITIONAL_IRA, AccountType.TRADITIONAL_401K}
         }
         traditional_balance_at_70 = sum(
             balance

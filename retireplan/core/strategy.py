@@ -612,9 +612,15 @@ def _apply_conversion_target_controls(
     alerts: list[str],
 ) -> tuple[float, float]:
     target_preserving_cap = _target_preserving_conversion_cap(scenario, period, available)
+    target_attaining_floor = _target_attaining_conversion_floor(scenario, period, available)
     target_at_risk = target_preserving_cap < float(
         scenario.strategy.roth_conversions.safety_limits.min_conversion.base
     )
+    if target_attaining_floor > candidate:
+        alerts.append(
+            f"Increased Roth conversion from {candidate:.2f} to {target_attaining_floor:.2f} to pursue the traditional balance target at age 70."
+        )
+        candidate = target_attaining_floor
     if target_preserving_cap < candidate:
         alerts.append(
             f"Reduced Roth conversion from {candidate:.2f} to {target_preserving_cap:.2f} to preserve the traditional balance target at age 70."
@@ -719,6 +725,23 @@ def _target_preserving_conversion_cap(
         (1.0 + projected_return) ** years_until_target
     )
     return round(max(available - required_balance_now, 0.0), 2)
+
+
+def _target_attaining_conversion_floor(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+    available: float,
+) -> float:
+    config = scenario.strategy.roth_conversions.balance_targets
+    if not config.enabled:
+        return 0.0
+    if config.target_priority != "higher_than_min_conversion":
+        return 0.0
+    return min(
+        _target_preserving_conversion_cap(scenario, period, available),
+        float(scenario.strategy.roth_conversions.safety_limits.max_conversion),
+        available,
+    )
 
 
 def _minimum_conversion_floor(

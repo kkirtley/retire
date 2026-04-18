@@ -142,13 +142,13 @@ accounts:
   - name: "Husband Roth IRA"
     type: "roth_ira"
     owner: "Husband"
-    starting_balance: 305000.00
+    starting_balance: 310000.00
     return_rate: 0.05
 
   - name: "Husband Roth 401k"
     type: "roth_401k"
     owner: "Husband"
-    starting_balance: 0.00
+    starting_balance: 6000.00
     return_rate: 0.05
 
   - name: "Wife Traditional IRA"
