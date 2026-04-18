@@ -250,15 +250,17 @@ def _activity_table(result: ProjectionResult) -> UiTableModel:
 
 def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> UiTableModel:
     mortgage_schedule = build_mortgage_schedule(scenario)
-    monthly_payment = round(
-        float(scenario.mortgage.scheduled_payment_monthly)
-        + mortgage_schedule.extra_payment_monthly,
-        2,
+    monthly_payment = round(mortgage_schedule.payment_monthly, 2)
+    payoff_date = (
+        mortgage_schedule.payoff_date.isoformat()[:7]
+        if mortgage_schedule.payoff_date is not None
+        else "n/a"
     )
     columns = (
         "year",
         "husband/wife ages",
         "monthly_payment",
+        "payoff_date",
         "scheduled_payment",
         "extra_principal",
         "total_payment",
@@ -278,6 +280,7 @@ def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> U
                 row.year,
                 _ages_label(row.husband_age, row.wife_age),
                 monthly_payment,
+                payoff_date,
                 row.mortgage.get("scheduled_payment", 0.0),
                 row.mortgage.get("extra_principal", 0.0),
                 row.mortgage.get("total_payment", 0.0),

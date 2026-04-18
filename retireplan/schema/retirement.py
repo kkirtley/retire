@@ -592,7 +592,7 @@ class MortgageConfig(StrictBaseModel):
     starting_balance: float = Field(ge=0.0)
     interest_rate: float = Field(ge=0.0, le=1.0)
     remaining_term_years: int = Field(ge=0)
-    scheduled_payment_monthly: float = Field(ge=0.0)
+    scheduled_payment_monthly: float | None = Field(default=None, ge=0.0)
     payment_frequency: PaymentFrequency
     payoff_by_age: PayoffByAge
 
@@ -607,6 +607,8 @@ class MortgageConfig(StrictBaseModel):
                 raise ValueError(
                     "mortgage.remaining_term_years must be > 0 when mortgage is enabled"
                 )
+            if self.scheduled_payment_monthly is not None and self.scheduled_payment_monthly <= 0:
+                raise ValueError("mortgage.scheduled_payment_monthly must be > 0 when provided")
         return self
 
 

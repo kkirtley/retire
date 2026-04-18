@@ -14,6 +14,7 @@ def test_mortgage_schedule_builds_annual_summaries_with_extra_principal():
 
     schedule = build_mortgage_schedule(scenario)
 
+    assert schedule.payment_monthly == 5700.0
     assert schedule.extra_payment_monthly == 0.0
     assert schedule.payoff_date is not None
     assert schedule.payoff_date.year == 2030
@@ -46,7 +47,21 @@ def test_mortgage_schedule_uses_scheduled_payment_when_target_solver_not_needed(
 
     schedule = build_mortgage_schedule(scenario)
 
+    assert schedule.payment_monthly == 5700.0
     assert schedule.extra_payment_monthly == 0.0
     assert schedule.payoff_date is not None
     assert schedule.payoff_date.year == 2030
     assert schedule.payoff_date.month == 3
+
+
+def test_mortgage_schedule_solves_monthly_payment_to_retirement_horizon_when_unset():
+    scenario = _baseline_scenario()
+    scenario.mortgage.scheduled_payment_monthly = None
+    scenario.mortgage.payoff_by_age.enabled = False
+
+    schedule = build_mortgage_schedule(scenario)
+
+    assert schedule.payment_monthly == 3490.7
+    assert schedule.payoff_date is not None
+    assert schedule.payoff_date.year == 2032
+    assert schedule.payoff_date.month == 12
