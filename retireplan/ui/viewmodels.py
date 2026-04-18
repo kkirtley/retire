@@ -116,7 +116,10 @@ def build_ui_snapshot(
         version=result.version,
         warnings=tuple(warnings),
         summary_rows=summary_rows,
-        results_table=_table_from_reporting(reporting["tables"]["yearly_overview"]),
+        results_table=_table_from_reporting(
+            reporting["tables"]["yearly_overview"],
+            excluded_columns=("husband_age", "wife_age"),
+        ),
         activity_table=_activity_table(result),
         account_balances_table=account_balance_tables[0].table,
         account_balance_tables=account_balance_tables,
@@ -161,8 +164,13 @@ def build_comparison_table(
     return UiTableModel(columns=columns, rows=tuple(rows))
 
 
-def _table_from_reporting(table: dict[str, Any]) -> UiTableModel:
-    columns = tuple(table["columns"])
+def _table_from_reporting(
+    table: dict[str, Any],
+    excluded_columns: tuple[str, ...] = (),
+) -> UiTableModel:
+    columns = tuple(
+        column for column in table["columns"] if column not in excluded_columns
+    )
     rows = tuple(tuple(row[column] for column in columns) for row in table["rows"])
     return UiTableModel(columns=columns, rows=rows)
 

@@ -46,6 +46,8 @@ def test_ui_snapshot_exposes_stage_9_views():
 
     assert snapshot.results_table.columns[0] == "year"
     assert snapshot.results_table.columns[1] == "husband/wife ages"
+    assert "husband_age" not in snapshot.results_table.columns
+    assert "wife_age" not in snapshot.results_table.columns
     assert snapshot.activity_table.columns[0] == "year"
     assert snapshot.activity_table.columns[1] == "husband/wife ages"
     assert snapshot.activity_table.columns[4] == "roth_conversion_total"
