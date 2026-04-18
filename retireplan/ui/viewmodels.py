@@ -168,9 +168,7 @@ def _table_from_reporting(
     table: dict[str, Any],
     excluded_columns: tuple[str, ...] = (),
 ) -> UiTableModel:
-    columns = tuple(
-        column for column in table["columns"] if column not in excluded_columns
-    )
+    columns = tuple(column for column in table["columns"] if column not in excluded_columns)
     rows = tuple(tuple(row[column] for column in columns) for row in table["rows"])
     return UiTableModel(columns=columns, rows=rows)
 
