@@ -583,7 +583,8 @@ class SpendingGuardrails(StrictBaseModel):
 
 class PayoffByAge(StrictBaseModel):
     enabled: bool
-    target_age: int = Field(ge=0)
+    target_age: int | None = Field(default=None, ge=0)
+    target_date: date | None = None
     method: MortgagePayoffMethod
 
 

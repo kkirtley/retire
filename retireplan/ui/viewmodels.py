@@ -261,6 +261,9 @@ def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> U
         "husband/wife ages",
         "monthly_payment",
         "payoff_date",
+        "property_tax",
+        "homeowners_insurance",
+        "total_housing_payment",
         "scheduled_payment",
         "extra_principal",
         "total_payment",
@@ -281,6 +284,14 @@ def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> U
                 _ages_label(row.husband_age, row.wife_age),
                 monthly_payment,
                 payoff_date,
+                row.expenses.get("property_tax", 0.0),
+                row.expenses.get("homeowners_insurance", 0.0),
+                round(
+                    row.expenses.get("mortgage_payment", 0.0)
+                    + row.expenses.get("property_tax", 0.0)
+                    + row.expenses.get("homeowners_insurance", 0.0),
+                    2,
+                ),
                 row.mortgage.get("scheduled_payment", 0.0),
                 row.mortgage.get("extra_principal", 0.0),
                 row.mortgage.get("total_payment", 0.0),

@@ -63,18 +63,18 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert first_year.net_cash_flow == 53452.35
+    assert first_year.net_cash_flow == 66485.59
     assert first_year.withdrawals == {}
     assert first_year.mortgage == {
-        "scheduled_payment": 34200.0,
+        "scheduled_payment": 21166.76,
         "extra_principal": 0.0,
-        "total_payment": 34200.0,
-        "interest": 6404.58,
-        "principal": 27795.42,
-        "remaining_balance": 197204.58,
+        "total_payment": 21166.76,
+        "interest": 6568.58,
+        "principal": 14598.17,
+        "remaining_balance": 210401.83,
     }
-    assert first_year.expenses["mortgage_payment"] == 34200.0
-    assert first_year.liquid_resources_end == 847246.33
+    assert first_year.expenses["mortgage_payment"] == 21166.76
+    assert first_year.liquid_resources_end == 860476.68
     assert first_year.alerts == (
         "Skipped 2698.54 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
@@ -91,14 +91,14 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     }
     assert payoff_year.taxes == {"federal": 53204.8, "state": 11067.47, "total": 64272.27}
     assert payoff_year.mortgage == {
-        "scheduled_payment": 0.0,
+        "scheduled_payment": 38805.72,
         "extra_principal": 0.0,
-        "total_payment": 0.0,
-        "interest": 0.0,
-        "principal": 0.0,
+        "total_payment": 38805.72,
+        "interest": 1139.38,
+        "principal": 37666.34,
         "remaining_balance": 0.0,
     }
-    assert payoff_year.expenses["mortgage_payment"] == 0.0
+    assert payoff_year.expenses["mortgage_payment"] == 38805.72
     assert payoff_year.expenses["medicare_part_b"] > 0.0
     assert payoff_year.expenses["medicare_part_d"] > 0.0
     assert payoff_year.strategy == {
@@ -117,8 +117,8 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "Skipped 8007.93 of charitable giving because QCD-eligible IRA capacity was insufficient.",
         "Reduced Roth conversion from 160000.00 to 0.00 because of tax or IRMAA guardrails.",
     )
-    assert payoff_year.net_cash_flow == 175613.71
-    assert payoff_year.liquid_resources_end == 2462110.39
+    assert payoff_year.net_cash_flow == 136807.99
+    assert payoff_year.liquid_resources_end == 2450415.99
 
     assert retirement_year.medicare == {
         "part_b_base": 4192.8,
@@ -161,7 +161,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
         "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
     }
-    assert retirement_year.liquid_resources_end == 2484878.05
+    assert retirement_year.liquid_resources_end == 2472832.82
 
     assert final_year.year == 2067
     assert final_year.medicare == {
@@ -188,12 +188,12 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert final_year.mortgage["remaining_balance"] == 0.0
     assert final_year.withdrawals == {"Household Operating Cash": 26381.49}
     assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8434147.96
+    assert final_year.liquid_resources_end == 8401241.54
     assert final_year.alerts == (
         "Skipped 9832.96 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8434147.96,
+        "terminal_net_worth": 8401241.54,
         "total_taxes_paid": 528021.6,
         "total_roth_converted": 623205.48,
         "projected_rmds_by_year_total": 89958.81,
@@ -274,7 +274,7 @@ def test_bridge_surplus_only_restarts_after_age_seventy_transition():
 
     assert pre_retirement.contributions["Taxable Bridge Account"] == 48000.0
     assert pre_retirement.surplus_allocations.get("Taxable Bridge Account", 0.0) == 0.0
-    assert pre_retirement.surplus_allocations["Household Operating Cash"] == 175613.71
+    assert pre_retirement.surplus_allocations["Household Operating Cash"] == 136807.99
     assert bridge_spending_phase.contributions.get("Taxable Bridge Account", 0.0) == 0.0
     assert bridge_spending_phase.surplus_allocations == {}
     assert post_transition.surplus_allocations["Taxable Bridge Account"] == 13076.77

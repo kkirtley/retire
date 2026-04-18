@@ -301,12 +301,13 @@ mortgage:
   starting_balance: 225000.00
   interest_rate: 0.06
   remaining_term_years: 15
-  scheduled_payment_monthly: 5700.00
+  scheduled_payment_monthly:
   payment_frequency: "monthly"
 
   payoff_by_age:
     enabled: true
     target_age: 65
+    target_date: "2032-12-31"
     method: "compute_extra_principal"
 
 state_tax:

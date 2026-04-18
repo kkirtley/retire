@@ -110,14 +110,16 @@ def build_mortgage_schedule(scenario: RetirementScenario) -> MortgageSchedule:
 
 
 def _target_term_months(scenario: RetirementScenario, remaining_term_months: int) -> int:
-    target_date = scenario.simulation.retirement_date.replace(day=1)
-    if scenario.mortgage.payoff_by_age.enabled:
-        payoff_by_age_target = date(
-            scenario.household.husband.birth_year + scenario.mortgage.payoff_by_age.target_age,
-            scenario.household.husband.birth_month,
-            1,
-        )
-        target_date = min(target_date, payoff_by_age_target)
+    configured_target_date = (
+        scenario.mortgage.payoff_by_age.target_date
+        if scenario.mortgage.payoff_by_age.enabled
+        else None
+    )
+    target_date = (
+        configured_target_date.replace(day=1)
+        if configured_target_date is not None
+        else scenario.simulation.retirement_date.replace(day=1)
+    )
     start_date = scenario.simulation.start_date.replace(day=1)
     months_until_target = (target_date.year - start_date.year) * 12 + (
         target_date.month - start_date.month

@@ -55,14 +55,20 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.mortgage_table.columns[1] == "husband/wife ages"
     assert snapshot.mortgage_table.columns[2] == "monthly_payment"
     assert snapshot.mortgage_table.columns[3] == "payoff_date"
+    assert snapshot.mortgage_table.columns[4] == "property_tax"
+    assert snapshot.mortgage_table.columns[5] == "homeowners_insurance"
+    assert snapshot.mortgage_table.columns[6] == "total_housing_payment"
     assert snapshot.mortgage_table.columns[-1] == "remaining_balance"
     first_mortgage_row = snapshot.mortgage_table.rows[0]
     assert first_mortgage_row[0] == 2026
     assert first_mortgage_row[1] == "59 / 59"
-    assert first_mortgage_row[2] == 5700.0
-    assert first_mortgage_row[3] == "2030-03"
-    assert first_mortgage_row[6] == 34200.0
-    assert first_mortgage_row[9] == 197204.58
+    assert first_mortgage_row[2] == 3527.79
+    assert first_mortgage_row[3] == "2032-11"
+    assert first_mortgage_row[4] == 3528.77
+    assert first_mortgage_row[5] == 1260.27
+    assert first_mortgage_row[6] == 25955.8
+    assert first_mortgage_row[9] == 21166.76
+    assert first_mortgage_row[12] == 210401.83
     assert snapshot.account_balances_table.columns[0] == "year"
     assert snapshot.account_balances_table.columns[1] == "husband/wife ages"
     assert snapshot.account_balances_table.columns[2] == "surplus to Taxable Bridge Account"
