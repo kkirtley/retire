@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from retireplan.core.market_history import compound_growth_factor
 from retireplan.core.timeline_builder import TimelinePeriod, year_fraction_for_dates
 from retireplan.scenario import EarnedIncomePerson, RetirementScenario
 
@@ -31,6 +32,7 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
             scenario.household.husband.birth_year,
             scenario.income.social_security.husband.claim_age,
             period.year,
+            scenario,
         )
 
     own_wife_ss = 0.0
@@ -41,6 +43,7 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
             scenario.household.wife.birth_year,
             scenario.income.social_security.wife.claim_age,
             period.year,
+            scenario,
         )
         own_wife_ss *= period.fraction_of_year
         if period.survivor_phase and scenario.income.social_security.survivor_rule.enabled:
@@ -50,6 +53,7 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
                 scenario.household.husband.birth_year,
                 scenario.income.social_security.husband.claim_age,
                 period.year,
+                scenario,
             )
             survivor_benefit *= period.fraction_of_year
             wife_ss = max(own_wife_ss, survivor_benefit)
@@ -96,23 +100,36 @@ def social_security_for_year(
     birth_year: int,
     claim_age: float,
     year: int,
+    scenario: RetirementScenario,
 ) -> float:
     claim_year = birth_year + int(claim_age)
     if year < claim_year:
         return 0.0
-    years_since_claim = year - claim_year
-    return round(monthly_amount_at_claim * 12 * ((1 + cola_rate) ** years_since_claim), 2)
+    growth_factor = compound_growth_factor(
+        scenario,
+        claim_year,
+        year,
+        cola_rate,
+        use_historical_inflation=scenario.historical_analysis.use_historical_inflation_for_income_cola,
+    )
+    return round(monthly_amount_at_claim * 12 * growth_factor, 2)
 
 
 def va_disability_for_period(scenario: RetirementScenario, period: TimelinePeriod) -> float:
     benefit = scenario.income.va_disability
     if not period.husband_alive or period.year < benefit.start_date.year:
         return 0.0
-    years_since_start = period.year - benefit.start_date.year
+    growth_factor = compound_growth_factor(
+        scenario,
+        benefit.start_date.year,
+        period.year,
+        benefit.cola_rate,
+        use_historical_inflation=scenario.historical_analysis.use_historical_inflation_for_income_cola,
+    )
     return round(
         benefit.amount_monthly
         * 12
-        * ((1 + benefit.cola_rate) ** years_since_start)
+        * growth_factor
         * year_fraction_for_dates(period, benefit.start_date, None, scenario),
         2,
     )
@@ -126,12 +143,18 @@ def va_survivor_for_period(scenario: RetirementScenario, period: TimelinePeriod)
     death_cutoff = date(death_year, 12, 31)
     if death_cutoff < benefit.conditional_start.husband_death_after:
         return 0.0
-    years_since_start = period.year - death_year - 1
     benefit_start = date(death_year + 1, 1, 1)
+    growth_factor = compound_growth_factor(
+        scenario,
+        benefit_start.year,
+        period.year,
+        benefit.cola_rate,
+        use_historical_inflation=scenario.historical_analysis.use_historical_inflation_for_income_cola,
+    )
     return round(
         benefit.amount_monthly
         * 12
-        * ((1 + benefit.cola_rate) ** years_since_start)
+        * growth_factor
         * year_fraction_for_dates(period, benefit_start, None, scenario),
         2,
     )
@@ -141,11 +164,17 @@ def pension_for_period(scenario: RetirementScenario, period: TimelinePeriod) -> 
     pension = scenario.income.pension_income.wife_imrf
     if not pension.enabled or not period.wife_alive or period.year < pension.start_date.year:
         return 0.0
-    years_since_start = period.year - pension.start_date.year
+    growth_factor = compound_growth_factor(
+        scenario,
+        pension.start_date.year,
+        period.year,
+        pension.cola_rate,
+        use_historical_inflation=scenario.historical_analysis.use_historical_inflation_for_income_cola,
+    )
     return round(
         pension.amount_monthly
         * 12
-        * ((1 + pension.cola_rate) ** years_since_start)
+        * growth_factor
         * year_fraction_for_dates(period, pension.start_date, None, scenario),
         2,
     )

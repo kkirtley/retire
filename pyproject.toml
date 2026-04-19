@@ -22,7 +22,7 @@ retireplan = "retireplan.cli.main:app"
 include = ["retireplan*"]
 
 [tool.setuptools.package-data]
-retireplan = ["defaults/*.yaml"]
+retireplan = ["defaults/*.yaml", "defaults/*.csv"]
 
 [tool.black]
 line-length = 100

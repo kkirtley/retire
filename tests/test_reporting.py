@@ -2,18 +2,12 @@ import json
 from pathlib import Path
 
 from retireplan.core import project_scenario
-from retireplan.io import load_scenario
 from retireplan.reporting import build_reporting_bundle, write_reporting_bundle
 
 
-def _baseline_result():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
-    return loaded, project_scenario(loaded.scenario, loaded.warnings)
-
-
-def test_reporting_bundle_contains_stage_8_tables_and_charts():
-    loaded, result = _baseline_result()
+def test_reporting_bundle_contains_stage_8_tables_and_charts(golden_loaded):
+    loaded = golden_loaded
+    result = project_scenario(loaded.scenario, loaded.warnings)
 
     bundle = build_reporting_bundle(result, loaded.scenario)
 
@@ -33,15 +27,21 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
     }
     assert len(bundle["tables"]["yearly_overview"]["rows"]) == len(result.ledger)
     assert bundle["tables"]["yearly_overview"]["columns"][1] == "husband/wife ages"
+    assert bundle["tables"]["cashflow"]["columns"][1] == "husband/wife ages"
     assert "rollover_total" in bundle["tables"]["yearly_overview"]["columns"]
     assert "roth_conversion_total" in bundle["tables"]["yearly_overview"]["columns"]
     assert "qcd_distribution_total" in bundle["tables"]["yearly_overview"]["columns"]
     retirement_row = next(
         row for row in bundle["tables"]["yearly_overview"]["rows"] if row["year"] == 2033
     )
+    cashflow_row = next(row for row in bundle["tables"]["cashflow"]["rows"] if row["year"] == 2033)
     assert retirement_row["husband/wife ages"] == "66 / 66"
     assert retirement_row["rollover_total"] == 200491
     assert retirement_row["roth_conversion_total"] == 160000
+    assert cashflow_row["operating_gap_before_withdrawals"] == 17065
+    assert cashflow_row["bridge_withdrawal_for_conversion_taxes"] == 28784
+    assert cashflow_row["bridge_withdrawal_for_operations"] == 17065
+    assert cashflow_row["total_bridge_withdrawal"] == 45849
     account_balance_chart = bundle["charts"]["account_balances_stacked"]
     assert account_balance_chart["x_axis"] == "age"
     assert account_balance_chart["y_axis_step"] % 50000 == 0
@@ -49,6 +49,7 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
     qcd_depletion_row = next(
         row for row in bundle["tables"]["qcd_depletion"]["rows"] if row["year"] == 2042
     )
+    assert all(row["year"] >= 2038 for row in bundle["tables"]["qcd_depletion"]["rows"])
     assert qcd_depletion_row["husband_target_age"] == 89
     assert qcd_depletion_row["wife_target_age"] is None
     assert qcd_depletion_row["on_pace"] is True
@@ -64,8 +65,9 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
     )
 
 
-def test_reporting_bundle_writes_json_and_csv_exports(tmp_path: Path):
-    loaded, result = _baseline_result()
+def test_reporting_bundle_writes_json_and_csv_exports(tmp_path, golden_loaded):
+    loaded = golden_loaded
+    result = project_scenario(loaded.scenario, loaded.warnings)
     bundle = build_reporting_bundle(result, loaded.scenario)
 
     manifest = write_reporting_bundle(bundle, tmp_path)

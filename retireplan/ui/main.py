@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from retireplan.core import project_scenario
+from retireplan.core import analyze_historical_cohorts, project_scenario
 from retireplan.io import load_scenario, load_scenario_text
 from retireplan.reporting import build_reporting_bundle
 from retireplan.ui.viewmodels import (
@@ -61,6 +61,7 @@ class RetirePlanWindow(QMainWindow):
         self.inputs_warning_label = QLabel()
         self.summary_label = QLabel()
         self.results_table = QTableWidget()
+        self.cashflow_table = QTableWidget()
         self.activity_table = QTableWidget()
         self.qcd_depletion_table = QTableWidget()
         self.mortgage_table = QTableWidget()
@@ -72,6 +73,8 @@ class RetirePlanWindow(QMainWindow):
         self.charts_tab = QTabWidget()
         self.roth_table = QTableWidget()
         self.irmaa_table = QTableWidget()
+        self.historical_summary_label = QLabel()
+        self.historical_table = QTableWidget()
         self.compare_label = QLabel("Load a comparison scenario to populate this tab.")
         self.compare_table = QTableWidget()
         self.tabs = QTabWidget()
@@ -99,6 +102,7 @@ class RetirePlanWindow(QMainWindow):
         self.inputs_warning_label.setWordWrap(True)
         self.summary_label.setWordWrap(True)
         self.compare_label.setWordWrap(True)
+        self.historical_summary_label.setWordWrap(True)
         self.detail_output.setReadOnly(True)
 
         inputs_widget = QWidget()
@@ -114,6 +118,10 @@ class RetirePlanWindow(QMainWindow):
         activity_widget = QWidget()
         activity_layout = QVBoxLayout(activity_widget)
         activity_layout.addWidget(self.activity_table)
+
+        cashflow_widget = QWidget()
+        cashflow_layout = QVBoxLayout(cashflow_widget)
+        cashflow_layout.addWidget(self.cashflow_table)
 
         qcd_depletion_widget = QWidget()
         qcd_depletion_layout = QVBoxLayout(qcd_depletion_widget)
@@ -138,6 +146,11 @@ class RetirePlanWindow(QMainWindow):
         charts_layout = QVBoxLayout(charts_widget)
         charts_layout.addWidget(self.charts_tab)
 
+        historical_widget = QWidget()
+        historical_layout = QVBoxLayout(historical_widget)
+        historical_layout.addWidget(self.historical_summary_label)
+        historical_layout.addWidget(self.historical_table)
+
         compare_widget = QWidget()
         compare_layout = QVBoxLayout(compare_widget)
         compare_layout.addWidget(self.compare_label)
@@ -145,12 +158,14 @@ class RetirePlanWindow(QMainWindow):
 
         self.tabs.addTab(inputs_widget, "Inputs")
         self.tabs.addTab(results_widget, "Results Table")
+        self.tabs.addTab(cashflow_widget, "Cash Flow")
         self.tabs.addTab(activity_widget, "Retirement Activity")
         self.tabs.addTab(qcd_depletion_widget, "QCD Depletion")
         self.tabs.addTab(mortgage_widget, "Mortgage")
         self.tabs.addTab(balances_widget, "Account Balances")
         self.tabs.addTab(details_widget, "Calculation Details")
         self.tabs.addTab(charts_widget, "Charts")
+        self.tabs.addTab(historical_widget, "Historical Cohorts")
         self.tabs.addTab(self.roth_table, "Roth Conversion Planner")
         self.tabs.addTab(self.irmaa_table, "IRMAA Warnings")
         self.tabs.addTab(compare_widget, "Scenario Compare")
@@ -201,12 +216,14 @@ class RetirePlanWindow(QMainWindow):
 
     def _wire_actions(self) -> None:
         self._configure_table(self.results_table)
+        self._configure_table(self.cashflow_table)
         self._configure_table(self.activity_table)
         self._configure_table(self.qcd_depletion_table)
         self._configure_table(self.mortgage_table)
         self._configure_table(self.account_balances_table)
         self._configure_table(self.roth_table)
         self._configure_table(self.irmaa_table)
+        self._configure_table(self.historical_table)
         self._configure_table(self.compare_table)
         self.account_balance_filter.currentTextChanged.connect(
             self._on_account_balance_filter_changed
@@ -248,20 +265,36 @@ class RetirePlanWindow(QMainWindow):
                 path_hint=self.scenario_path_input.text().strip() or None,
             )
             result = project_scenario(loaded.scenario, loaded.warnings)
-            reporting = build_reporting_bundle(result, loaded.scenario)
-            snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
+            historical_analysis = analyze_historical_cohorts(loaded.scenario, loaded.warnings)
+            reporting = build_reporting_bundle(result, loaded.scenario, historical_analysis)
+            snapshot = build_ui_snapshot(
+                loaded.scenario,
+                result,
+                reporting,
+                loaded.warnings,
+                historical_analysis,
+            )
 
             comparison_snapshot = None
             compare_text = self.compare_path_input.text().strip()
             if compare_text:
                 compare_loaded = load_scenario(compare_text)
                 compare_result = project_scenario(compare_loaded.scenario, compare_loaded.warnings)
-                compare_reporting = build_reporting_bundle(compare_result, compare_loaded.scenario)
+                compare_historical_analysis = analyze_historical_cohorts(
+                    compare_loaded.scenario,
+                    compare_loaded.warnings,
+                )
+                compare_reporting = build_reporting_bundle(
+                    compare_result,
+                    compare_loaded.scenario,
+                    compare_historical_analysis,
+                )
                 comparison_snapshot = build_ui_snapshot(
                     compare_loaded.scenario,
                     compare_result,
                     compare_reporting,
                     compare_loaded.warnings,
+                    compare_historical_analysis,
                 )
 
             self.apply_projection_snapshot(snapshot, comparison_snapshot)
@@ -282,6 +315,7 @@ class RetirePlanWindow(QMainWindow):
             "\n".join(f"{label}: {value}" for label, value in snapshot.summary_rows)
         )
         self._populate_table(self.results_table, snapshot.results_table)
+        self._populate_table(self.cashflow_table, snapshot.cashflow_table)
         self._populate_table(self.activity_table, snapshot.activity_table)
         self._populate_table(self.qcd_depletion_table, snapshot.qcd_depletion_table)
         self._populate_table(self.mortgage_table, snapshot.mortgage_table)
@@ -309,6 +343,10 @@ class RetirePlanWindow(QMainWindow):
         self._refresh_detail_output()
         self._populate_table(self.roth_table, snapshot.roth_planner_table)
         self._populate_table(self.irmaa_table, snapshot.irmaa_table)
+        self.historical_summary_label.setText(
+            "\n".join(f"{label}: {value}" for label, value in snapshot.historical_summary_rows)
+        )
+        self._populate_table(self.historical_table, snapshot.historical_cohorts_table)
         self._populate_charts(snapshot)
 
         if comparison_snapshot is None:
@@ -340,7 +378,7 @@ class RetirePlanWindow(QMainWindow):
 
         axis_x = QValueAxis()
         axis_x.setLabelFormat("%.0f")
-        axis_x.setTitleText(chart.x_axis.title())
+        axis_x.setTitleText(chart.x_axis.replace("_", " ").title())
         if all_x_values:
             axis_min = float((min(all_x_values) // 5) * 5)
             axis_max = float((((max(all_x_values) + 4) // 5) * 5))

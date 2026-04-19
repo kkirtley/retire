@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Callable
 
+from retireplan.core.market_history import account_return_for_period, fixed_account_return_for_year
 from retireplan.core.timeline_builder import TimelinePeriod, year_fraction_for_dates
 from retireplan.scenario import (
     Account,
@@ -92,7 +92,16 @@ def _surplus_destination_account(
     scenario: RetirementScenario,
     period: TimelinePeriod,
 ) -> str | None:
-    configured_destination = scenario.contributions.surplus_allocation.destination_account
+    surplus_allocation = scenario.contributions.surplus_allocation
+    if not surplus_allocation.enabled or not surplus_allocation.destination_account:
+        return None
+    if (
+        surplus_allocation.start_age_husband is not None
+        and period.husband_age < surplus_allocation.start_age_husband
+    ):
+        return None
+
+    configured_destination = surplus_allocation.destination_account
     destination_account = next(
         (account for account in scenario.accounts if account.name == configured_destination),
         None,
@@ -174,21 +183,12 @@ def apply_account_returns(
 ) -> None:
     for account in scenario.accounts:
         balances[account.name] *= (
-            1.0 + annual_return_for_year(account, period.year, scenario) * period.fraction_of_year
+            1.0 + account_return_for_period(account, period, scenario) * period.fraction_of_year
         )
 
 
 def annual_return_for_year(account: Account, year: int, scenario: RetirementScenario) -> float:
-    probe_date = date(year, 6, 30)
-    if account.return_schedule:
-        for entry in account.return_schedule:
-            if entry.start_date <= probe_date and (
-                entry.end_date is None or probe_date <= entry.end_date
-            ):
-                return float(entry.annual_rate)
-    if account.return_rate is not None:
-        return float(account.return_rate)
-    return float(scenario.assumptions.investment_return_default)
+    return fixed_account_return_for_year(account, year, scenario)
 
 
 def liquid_resources_total(scenario: RetirementScenario, balances: dict[str, float]) -> float:

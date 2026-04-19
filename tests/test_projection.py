@@ -1,15 +1,12 @@
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 
 from retireplan.core import project_scenario
-from retireplan.io import load_scenario
 
 
-def test_projection_runs_with_rich_scenario_shape():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
+def test_projection_runs_with_rich_scenario_shape(golden_loaded):
+    loaded = golden_loaded
 
     result = project_scenario(loaded.scenario, loaded.warnings)
 
@@ -17,7 +14,7 @@ def test_projection_runs_with_rich_scenario_shape():
     assert result.summary["total_taxes_paid"] > 0.0
     assert result.summary["failure_year_if_any"] is None
     assert result.ledger[0].year == 2026
-    assert result.ledger[-1].wife_age == 100
+    assert result.ledger[-1].wife_age == loaded.scenario.simulation.end_condition.wife_age
     assert "earned_income_husband" in result.ledger[0].income
     assert "federal" in result.ledger[0].taxes
     assert "state" in result.ledger[0].taxes
@@ -30,9 +27,8 @@ def test_projection_runs_with_rich_scenario_shape():
     assert any("Stage 9 desktop UI workflow" in warning for warning in result.warnings)
 
 
-def test_projection_matches_stage_7_baseline_checkpoints():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
+def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
+    loaded = golden_loaded
 
     result = project_scenario(loaded.scenario, loaded.warnings)
     rows = {row.year: row for row in result.ledger}
@@ -63,7 +59,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert first_year.net_cash_flow == 66485.59
+    assert first_year.net_cash_flow == 77576.0
     assert first_year.withdrawals == {}
     assert first_year.mortgage == {
         "scheduled_payment": 21166.76,
@@ -74,7 +70,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "remaining_balance": 210401.83,
     }
     assert first_year.expenses["mortgage_payment"] == 21166.76
-    assert first_year.liquid_resources_end == 860476.68
+    assert first_year.liquid_resources_end == 796111.09
     assert first_year.alerts == (
         "Skipped 2698.54 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
@@ -89,7 +85,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "covered_people": 2.0,
         "irmaa_tier": 2.0,
     }
-    assert payoff_year.taxes == {"federal": 53204.8, "state": 11067.47, "total": 64272.27}
+    assert payoff_year.taxes == {"federal": 52436.8, "state": 10939.47, "total": 63376.27}
     assert payoff_year.mortgage == {
         "scheduled_payment": 38805.72,
         "extra_principal": 0.0,
@@ -117,8 +113,8 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "Skipped 8007.93 of charitable giving because QCD-eligible IRA capacity was insufficient.",
         "Reduced Roth conversion from 160000.00 to 0.00 because of tax or IRMAA guardrails.",
     )
-    assert payoff_year.net_cash_flow == 136807.99
-    assert payoff_year.liquid_resources_end == 2450415.99
+    assert payoff_year.net_cash_flow == 163217.25
+    assert payoff_year.liquid_resources_end == 1600922.18
 
     assert retirement_year.medicare == {
         "part_b_base": 4192.8,
@@ -131,8 +127,8 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     }
     assert retirement_year.strategy == {
         "roth_conversion_total": 160000.0,
-        "conversion_tax_impact": 29615.82,
-        "conversion_tax_payment": 29615.82,
+        "conversion_tax_impact": 28783.82,
+        "conversion_tax_payment": 28783.82,
         "conversion_tax_shortfall": 0.0,
         "rmd_total": 0,
         "qcd_total": 0.0,
@@ -140,7 +136,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert retirement_year.taxes == {"federal": 23615.69, "state": 6000.13, "total": 29615.82}
+    assert retirement_year.taxes == {"federal": 22911.69, "state": 5872.13, "total": 28783.82}
     assert retirement_year.mortgage == {
         "scheduled_payment": 0.0,
         "extra_principal": 0.0,
@@ -151,19 +147,16 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     }
     assert retirement_year.expenses["mortgage_payment"] == 0.0
     assert retirement_year.net_cash_flow == 0.0
-    assert retirement_year.withdrawals == {
-        "Taxable Bridge Account": 29615.82,
-        "Household Operating Cash": 43215.91,
-    }
+    assert retirement_year.withdrawals == {"Taxable Bridge Account": 45848.64}
     assert retirement_year.surplus_allocations == {}
     assert retirement_year.rollovers == {
         "Husband Traditional 401k -> Husband Traditional IRA": 170678.22,
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
         "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
     }
-    assert retirement_year.liquid_resources_end == 2472832.83
+    assert retirement_year.liquid_resources_end == 1639053.19
 
-    assert final_year.year == 2067
+    assert final_year.year == 2057
     assert final_year.medicare == {
         "part_b_base": 2096.4,
         "part_d_base": 416.4,
@@ -184,17 +177,18 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert final_year.taxes == {"federal": 3693.94, "state": 1304.65, "total": 4998.59}
+    assert final_year.taxes == {"federal": 1563.07, "state": 594.36, "total": 2157.43}
     assert final_year.mortgage["remaining_balance"] == 0.0
-    assert final_year.withdrawals == {"Household Operating Cash": 39816.25}
-    assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8763009.87
+    assert final_year.withdrawals == {}
+    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4734.5}
+    assert final_year.net_cash_flow == 4734.5
+    assert final_year.liquid_resources_end == 7781387.68
     assert final_year.alerts == (
-        "Skipped 13590.81 of charitable giving because QCD-eligible IRA capacity was insufficient.",
+        "Skipped 10617.11 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8763009.87,
-        "total_taxes_paid": 520167.1,
+        "terminal_net_worth": 7781387.68,
+        "total_taxes_paid": 475692.8,
         "total_roth_converted": 640000.0,
         "projected_rmds_by_year_total": 71209.97,
         "total_qcd": 275572.89,
@@ -206,9 +200,8 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert result.success is True
 
 
-def test_projection_can_roll_401k_balances_into_iras_at_retirement():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    base_scenario = load_scenario(scenario_path).scenario
+def test_projection_can_roll_401k_balances_into_iras_at_retirement(golden_scenario):
+    base_scenario = golden_scenario
     base_scenario.strategy.roth_conversions.enabled = False
     for account in base_scenario.accounts:
         if account.name == "Husband Roth 401k":
@@ -261,9 +254,8 @@ def test_projection_can_roll_401k_balances_into_iras_at_retirement():
     )
 
 
-def test_bridge_surplus_only_restarts_after_age_seventy_transition():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
+def test_bridge_account_uses_only_explicit_modeled_contributions_before_retirement(golden_loaded):
+    loaded = golden_loaded
 
     result = project_scenario(loaded.scenario, loaded.warnings)
     rows = {row.year: row for row in result.ledger}
@@ -271,11 +263,12 @@ def test_bridge_surplus_only_restarts_after_age_seventy_transition():
     pre_retirement = rows[2032]
     bridge_spending_phase = rows[2033]
     post_transition = rows[2037]
+    final_year = rows[result.ledger[-1].year]
 
     assert pre_retirement.contributions["Taxable Bridge Account"] == 48000.0
-    assert pre_retirement.surplus_allocations.get("Taxable Bridge Account", 0.0) == 0.0
-    assert pre_retirement.surplus_allocations["Household Operating Cash"] == 136807.99
+    assert pre_retirement.surplus_allocations == {}
     assert bridge_spending_phase.contributions.get("Taxable Bridge Account", 0.0) == 0.0
     assert bridge_spending_phase.surplus_allocations == {}
-    assert post_transition.surplus_allocations["Taxable Bridge Account"] == 13076.77
-    assert post_transition.surplus_allocations.get("Household Operating Cash", 0.0) == 0.0
+    assert bridge_spending_phase.withdrawals["Taxable Bridge Account"] == 45848.64
+    assert post_transition.surplus_allocations == {"Taxable Bridge Account": 43788.74}
+    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4734.5}

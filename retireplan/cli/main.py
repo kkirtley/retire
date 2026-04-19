@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from retireplan.core import project_scenario
+from retireplan.core import analyze_historical_cohorts, project_scenario
 from retireplan.io import load_scenario
 from retireplan.output_formatting import round_output_value
 from retireplan.reporting import build_reporting_bundle, write_reporting_bundle
@@ -43,7 +43,8 @@ def run(
     """Run a retirement projection."""
     loaded = load_scenario(scenario_path)
     result = project_scenario(loaded.scenario, loaded.warnings)
-    reporting = build_reporting_bundle(result, loaded.scenario)
+    historical_analysis = analyze_historical_cohorts(loaded.scenario, loaded.warnings)
+    reporting = build_reporting_bundle(result, loaded.scenario, historical_analysis)
 
     out = out.expanduser()
     charts = charts.expanduser()
@@ -61,6 +62,9 @@ def run(
         "success": result.success,
         "failure_year": result.failure_year,
         "reporting": reporting,
+        "historical_analysis": (
+            None if historical_analysis is None else historical_analysis.to_dict()
+        ),
         "report_exports": report_exports,
         "ledger": [row.__dict__ for row in result.ledger],
     }
@@ -68,6 +72,12 @@ def run(
 
     typer.echo(f"Projection complete: {result.scenario_name} v{result.version}")
     typer.echo(f"Success: {result.success}")
+    if historical_analysis is not None:
+        typer.echo(
+            "Historical weighted success rate: "
+            f"{historical_analysis.weighted_success_rate:.1%} "
+            f"(target {historical_analysis.target_success_rate:.0%})"
+        )
     typer.echo(f"Output: {out.resolve()}")
     typer.echo(f"Charts directory written: {charts.resolve()}")
     if result.warnings:

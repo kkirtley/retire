@@ -18,7 +18,7 @@ from retireplan.core.timeline_builder import build_timeline
 from retireplan.medicare import calculate_medicare_summary
 from retireplan.mortgage import build_mortgage_schedule
 from retireplan.scenario import AccountOwner, AccountType, RetirementScenario
-from retireplan.tax import TaxSummary, calculate_tax_summary
+from retireplan.tax import TaxSummary, calculate_tax_summary, senior_standard_deduction_count
 
 
 @dataclass(frozen=True)
@@ -113,6 +113,13 @@ def project_scenario(
             income,
             strategy_execution.cash_withdrawals,
             extra_ordinary_income=strategy_execution.conversion_ordinary_income,
+            senior_standard_deduction_count=senior_standard_deduction_count(
+                period.filing_status,
+                husband_age=period.husband_age,
+                wife_age=period.wife_age,
+                husband_alive=period.husband_alive,
+                wife_alive=period.wife_alive,
+            ),
         )
         withdrawals: dict[str, float] = dict(strategy_execution.cash_withdrawals)
         surplus_allocations: dict[str, float] = {}
@@ -189,6 +196,7 @@ def project_scenario(
         strategy_values = strategy_execution.ledger_values(
             conversion_tax_impact(
                 scenario,
+                period,
                 period.filing_status,
                 income,
                 withdrawals,
@@ -262,6 +270,13 @@ def _settle_period_cash_flow(
         income,
         withdrawals,
         extra_ordinary_income=extra_ordinary_income,
+        senior_standard_deduction_count=senior_standard_deduction_count(
+            filing_status,
+            husband_age=period.husband_age,
+            wife_age=period.wife_age,
+            husband_alive=period.husband_alive,
+            wife_alive=period.wife_alive,
+        ),
     )
     final_balances = dict(starting_balances)
     settled_net_cash_flow = 0.0
@@ -274,6 +289,13 @@ def _settle_period_cash_flow(
             income,
             withdrawals,
             extra_ordinary_income=extra_ordinary_income,
+            senior_standard_deduction_count=senior_standard_deduction_count(
+                filing_status,
+                husband_age=period.husband_age,
+                wife_age=period.wife_age,
+                husband_alive=period.husband_alive,
+                wife_alive=period.wife_alive,
+            ),
         )
         cash_flow_before_settlement = (
             total_income + base_cash_inflows - total_expenses - tax_summary.total_tax

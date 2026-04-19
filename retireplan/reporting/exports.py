@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from retireplan.core import ProjectionResult
+from retireplan.core.historical_analysis import HistoricalAnalysisResult
 from retireplan.core.strategy import project_qcd_depletion_progress
 from retireplan.output_formatting import round_output_value
 from retireplan.scenario import RetirementScenario
@@ -16,6 +17,7 @@ from retireplan.scenario import RetirementScenario
 def build_reporting_bundle(
     result: ProjectionResult,
     scenario: RetirementScenario | None = None,
+    historical_analysis: HistoricalAnalysisResult | None = None,
 ) -> dict[str, Any]:
     tables = {
         "yearly_overview": _yearly_overview_table(result),
@@ -25,12 +27,18 @@ def build_reporting_bundle(
     }
     if scenario is not None:
         tables["qcd_depletion"] = _qcd_depletion_table(result, scenario)
+    if historical_analysis is not None:
+        tables["historical_cohorts"] = _historical_cohorts_table(historical_analysis)
     charts = {
         "total_liquid_net_worth": _liquid_net_worth_chart(result),
         "income_vs_expenses": _income_vs_expenses_chart(result),
         "taxes_over_time": _taxes_chart(result),
         "account_balances_stacked": _account_balances_chart(result),
     }
+    if historical_analysis is not None:
+        charts["historical_terminal_net_worth"] = _historical_terminal_net_worth_chart(
+            historical_analysis
+        )
     bundle = {
         "summary": {
             "scenario_name": result.scenario_name,
@@ -38,6 +46,7 @@ def build_reporting_bundle(
             "success": result.success,
             "failure_year": result.failure_year,
             "rows": len(result.ledger),
+            "historical_analysis_included": historical_analysis is not None,
         },
         "tables": tables,
         "charts": charts,
@@ -110,25 +119,82 @@ def _yearly_overview_table(result: ProjectionResult) -> dict[str, Any]:
 def _cashflow_table(result: ProjectionResult) -> dict[str, Any]:
     columns = [
         "year",
+        "husband/wife ages",
         "total_income",
+        "base_living",
+        "travel",
+        "housing_total",
+        "medicare_total",
         "total_expenses",
+        "non_conversion_tax_total",
+        "operating_gap_before_withdrawals",
+        "bridge_withdrawal_for_conversion_taxes",
+        "bridge_withdrawal_for_operations",
+        "total_bridge_withdrawal",
+        "other_withdrawals",
+        "surplus_to_bridge",
         "total_taxes",
         "total_contributions",
         "total_withdrawals",
         "total_qcd_distributions",
+        "conversion_tax_payment",
         "net_cash_flow",
     ]
     rows = []
     for row in result.ledger:
+        base_living = row.expenses.get("base_living", 0.0)
+        travel = row.expenses.get("travel", 0.0)
+        housing_total = round(
+            row.expenses.get("property_tax", 0.0)
+            + row.expenses.get("homeowners_insurance", 0.0)
+            + row.expenses.get("mortgage_payment", 0.0),
+            2,
+        )
+        medicare_total = row.medicare.get("total", 0.0)
+        total_income = round(sum(row.income.values()), 2)
+        total_expenses = round(sum(row.expenses.values()), 2)
+        total_taxes = row.taxes.get("total", 0.0)
+        conversion_tax_payment = row.strategy.get("conversion_tax_payment", 0.0)
+        non_conversion_tax_total = round(max(total_taxes - conversion_tax_payment, 0.0), 2)
+        operating_gap_before_withdrawals = round(
+            max(total_expenses + non_conversion_tax_total - total_income, 0.0),
+            2,
+        )
+        total_bridge_withdrawal = row.withdrawals.get("Taxable Bridge Account", 0.0)
+        bridge_withdrawal_for_conversion_taxes = round(
+            min(total_bridge_withdrawal, conversion_tax_payment),
+            2,
+        )
+        bridge_withdrawal_for_operations = round(
+            max(total_bridge_withdrawal - bridge_withdrawal_for_conversion_taxes, 0.0),
+            2,
+        )
+        other_withdrawals = round(
+            max(sum(row.withdrawals.values()) - total_bridge_withdrawal, 0.0),
+            2,
+        )
         rows.append(
             {
                 "year": row.year,
-                "total_income": round(sum(row.income.values()), 2),
-                "total_expenses": round(sum(row.expenses.values()), 2),
-                "total_taxes": row.taxes.get("total", 0.0),
+                "husband/wife ages": f"{row.husband_age} / {row.wife_age}",
+                "total_income": total_income,
+                "base_living": base_living,
+                "travel": travel,
+                "housing_total": housing_total,
+                "medicare_total": medicare_total,
+                "total_expenses": total_expenses,
+                "non_conversion_tax_total": non_conversion_tax_total,
+                "operating_gap_before_withdrawals": operating_gap_before_withdrawals,
+                "bridge_withdrawal_for_conversion_taxes": bridge_withdrawal_for_conversion_taxes,
+                "bridge_withdrawal_for_operations": bridge_withdrawal_for_operations,
+                "total_bridge_withdrawal": total_bridge_withdrawal,
+                "other_withdrawals": other_withdrawals,
+                "surplus_to_bridge": row.surplus_allocations.get("Taxable Bridge Account", 0.0),
+                "total_taxes": total_taxes,
                 "total_contributions": round(sum(row.contributions.values()), 2),
                 "total_withdrawals": round(sum(row.withdrawals.values()), 2),
                 "total_qcd_distributions": round(sum(row.qcd_distributions.values()), 2),
+                "conversion_tax_payment": conversion_tax_payment,
                 "net_cash_flow": row.net_cash_flow,
             }
         )
@@ -156,6 +222,9 @@ def _qcd_depletion_table(
         "constrained",
     ]
     rows = []
+    qcd_age = int(scenario.strategy.charitable_giving.qcd.start_age // 1)
+    if qcd_age < float(scenario.strategy.charitable_giving.qcd.start_age):
+        qcd_age += 1
     for row in result.ledger:
         owner_progress = {
             progress.owner: progress
@@ -172,6 +241,11 @@ def _qcd_depletion_table(
             )
         }
         if not owner_progress:
+            continue
+        if all(
+            (row.husband_age if owner == "Husband" else row.wife_age) < qcd_age
+            for owner in owner_progress
+        ):
             continue
         husband = owner_progress.get("Husband")
         wife = owner_progress.get("Wife")
@@ -244,6 +318,42 @@ def _account_balances_table(result: ProjectionResult) -> dict[str, Any]:
                 }
             )
     return {"columns": columns, "rows": rows}
+
+
+def _historical_cohorts_table(historical_analysis: HistoricalAnalysisResult) -> dict[str, Any]:
+    columns = [
+        "start_year",
+        "end_year",
+        "weight",
+        "success",
+        "failure_year",
+        "terminal_net_worth",
+        "total_taxes_paid",
+        "total_roth_converted",
+    ]
+    rows = [cohort.__dict__ for cohort in historical_analysis.cohorts]
+    return {"columns": columns, "rows": rows}
+
+
+def _historical_terminal_net_worth_chart(
+    historical_analysis: HistoricalAnalysisResult,
+) -> dict[str, Any]:
+    values = [cohort.terminal_net_worth for cohort in historical_analysis.cohorts]
+    return {
+        "title": "Historical Cohort Terminal Net Worth",
+        "kind": "bar",
+        "x_axis": "historical_start_year",
+        "y_axis_step": _chart_axis_step(values),
+        "series": [
+            {
+                "name": "terminal_net_worth",
+                "points": [
+                    {"historical_start_year": cohort.start_year, "value": cohort.terminal_net_worth}
+                    for cohort in historical_analysis.cohorts
+                ],
+            }
+        ],
+    }
 
 
 def _liquid_net_worth_chart(result: ProjectionResult) -> dict[str, Any]:

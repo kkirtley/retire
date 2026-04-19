@@ -1,17 +1,10 @@
 from datetime import date
-from pathlib import Path
 
-from retireplan.io import load_scenario
 from retireplan.mortgage import build_mortgage_schedule
 
 
-def _baseline_scenario():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    return load_scenario(scenario_path).scenario
-
-
-def test_mortgage_schedule_builds_annual_summaries_with_extra_principal():
-    scenario = _baseline_scenario()
+def test_mortgage_schedule_builds_annual_summaries_with_extra_principal(golden_scenario):
+    scenario = golden_scenario
 
     schedule = build_mortgage_schedule(scenario)
 
@@ -30,8 +23,8 @@ def test_mortgage_schedule_builds_annual_summaries_with_extra_principal():
     assert first_year.principal > first_year.extra_principal
 
 
-def test_mortgage_schedule_pays_off_by_target_age_year():
-    scenario = _baseline_scenario()
+def test_mortgage_schedule_pays_off_by_target_age_year(golden_scenario):
+    scenario = golden_scenario
 
     schedule = build_mortgage_schedule(scenario)
 
@@ -42,8 +35,8 @@ def test_mortgage_schedule_pays_off_by_target_age_year():
     assert 2033 not in schedule.annual_summaries
 
 
-def test_mortgage_schedule_uses_scheduled_payment_when_target_solver_not_needed():
-    scenario = _baseline_scenario()
+def test_mortgage_schedule_uses_scheduled_payment_when_target_solver_not_needed(golden_scenario):
+    scenario = golden_scenario
     scenario.mortgage.scheduled_payment_monthly = 5700.0
     scenario.mortgage.payoff_by_age.enabled = False
 
@@ -56,8 +49,8 @@ def test_mortgage_schedule_uses_scheduled_payment_when_target_solver_not_needed(
     assert schedule.payoff_date.month == 3
 
 
-def test_mortgage_schedule_solves_monthly_payment_to_retirement_horizon_when_unset():
-    scenario = _baseline_scenario()
+def test_mortgage_schedule_solves_monthly_payment_to_retirement_horizon_when_unset(golden_scenario):
+    scenario = golden_scenario
     scenario.mortgage.scheduled_payment_monthly = None
     scenario.mortgage.payoff_by_age.enabled = False
 
@@ -69,8 +62,8 @@ def test_mortgage_schedule_solves_monthly_payment_to_retirement_horizon_when_uns
     assert schedule.payoff_date.month == 12
 
 
-def test_mortgage_schedule_prefers_specific_target_date_over_retirement_date():
-    scenario = _baseline_scenario()
+def test_mortgage_schedule_prefers_specific_target_date_over_retirement_date(golden_scenario):
+    scenario = golden_scenario
     scenario.mortgage.scheduled_payment_monthly = None
     scenario.mortgage.payoff_by_age.target_date = date(2031, 12, 1)
 

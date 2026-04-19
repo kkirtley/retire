@@ -37,6 +37,7 @@ def calculate_tax_summary(
     income: dict[str, float],
     withdrawals: dict[str, float],
     extra_ordinary_income: float = 0.0,
+    senior_standard_deduction_count: int = 0,
 ) -> TaxSummary:
     ordinary_income = round(
         income.get("earned_income_husband", 0.0)
@@ -55,7 +56,14 @@ def calculate_tax_summary(
         2,
     )
     adjusted_gross_income = round(ordinary_income + taxable_social_security, 2)
-    standard_deduction = round(_standard_deduction(scenario, filing_status), 2)
+    standard_deduction = round(
+        _standard_deduction(
+            scenario,
+            filing_status,
+            senior_standard_deduction_count=senior_standard_deduction_count,
+        ),
+        2,
+    )
     federal_taxable_income = round(max(adjusted_gross_income - standard_deduction, 0.0), 2)
     federal_tax = round(_federal_tax(scenario, filing_status, federal_taxable_income), 2)
     state_taxable_income = round(
@@ -124,10 +132,36 @@ def _social_security_thresholds(filing_status: str) -> tuple[float, float, float
     return 32000.0, 44000.0, 6000.0
 
 
-def _standard_deduction(scenario: RetirementScenario, filing_status: str) -> float:
+def senior_standard_deduction_count(
+    filing_status: str,
+    *,
+    husband_age: int | None = None,
+    wife_age: int | None = None,
+    husband_alive: bool = True,
+    wife_alive: bool = True,
+) -> int:
+    husband_eligible = husband_alive and husband_age is not None and husband_age >= 65
+    wife_eligible = wife_alive and wife_age is not None and wife_age >= 65
+
     if filing_status == _SINGLE:
-        return float(scenario.federal_tax.standard_deduction.single)
-    return float(scenario.federal_tax.standard_deduction.mfj)
+        return 1 if husband_eligible or wife_eligible else 0
+    return int(husband_eligible) + int(wife_eligible)
+
+
+def _standard_deduction(
+    scenario: RetirementScenario,
+    filing_status: str,
+    senior_standard_deduction_count: int = 0,
+) -> float:
+    if filing_status == _SINGLE:
+        return float(scenario.federal_tax.standard_deduction.single) + (
+            senior_standard_deduction_count
+            * float(scenario.federal_tax.standard_deduction.additional_age65_single)
+        )
+    return float(scenario.federal_tax.standard_deduction.mfj) + (
+        senior_standard_deduction_count
+        * float(scenario.federal_tax.standard_deduction.additional_age65_mfj_per_person)
+    )
 
 
 def _federal_tax(scenario: RetirementScenario, filing_status: str, taxable_income: float) -> float:

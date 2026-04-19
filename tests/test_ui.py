@@ -1,13 +1,16 @@
 import os
-from pathlib import Path
+from copy import deepcopy
+
+from retireplan.io.scenario_loader import ScenarioLoadResult
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import yaml
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from retireplan.core import project_scenario
-from retireplan.io import load_scenario, load_scenario_text
+from retireplan.core import analyze_historical_cohorts, project_scenario
+from retireplan.io import load_scenario_text
 from retireplan.reporting import build_reporting_bundle
 from retireplan.ui import RetirePlanWindow
 from retireplan.ui.viewmodels import (
@@ -21,13 +24,10 @@ def _app() -> QApplication:
     return QApplication.instance() or QApplication([])
 
 
-def _baseline_loaded():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    return load_scenario(scenario_path)
-
-
-def test_load_scenario_text_uses_same_validation_pipeline_as_file_loader():
-    loaded = _baseline_loaded()
+def test_load_scenario_text_uses_same_validation_pipeline_as_file_loader(
+    golden_loaded: ScenarioLoadResult,
+):
+    loaded = golden_loaded
     text = loaded.path.read_text(encoding="utf-8")
 
     from_text = load_scenario_text(text, path_hint=loaded.path)
@@ -37,8 +37,8 @@ def test_load_scenario_text_uses_same_validation_pipeline_as_file_loader():
     assert from_text.warnings == loaded.warnings
 
 
-def test_ui_snapshot_exposes_stage_9_views():
-    loaded = _baseline_loaded()
+def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
+    loaded = golden_loaded
     result = project_scenario(loaded.scenario, loaded.warnings)
     reporting = build_reporting_bundle(result, loaded.scenario)
 
@@ -49,6 +49,15 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.results_table.columns[1] == "husband/wife ages"
     assert "husband_age" not in snapshot.results_table.columns
     assert "wife_age" not in snapshot.results_table.columns
+    assert snapshot.cashflow_table.columns[0] == "year"
+    assert snapshot.cashflow_table.columns[1] == "husband/wife ages"
+    assert "bridge_withdrawal_for_conversion_taxes" in snapshot.cashflow_table.columns
+    assert "bridge_withdrawal_for_operations" in snapshot.cashflow_table.columns
+    age_sixty_six_cashflow = next(row for row in snapshot.cashflow_table.rows if row[0] == 2033)
+    assert age_sixty_six_cashflow[9] == 17065
+    assert age_sixty_six_cashflow[10] == 28784
+    assert age_sixty_six_cashflow[11] == 17065
+    assert age_sixty_six_cashflow[12] == 45849
     assert snapshot.activity_table.columns[0] == "year"
     assert snapshot.activity_table.columns[1] == "husband/wife ages"
     assert snapshot.activity_table.columns[4] == "qcd_distribution_total"
@@ -56,9 +65,16 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.activity_table.columns[6] == "roth_conversion_total"
     assert snapshot.qcd_depletion_table.columns[0] == "year"
     assert snapshot.qcd_depletion_table.columns[1] == "husband/wife ages"
+    assert "wife_balance" not in snapshot.qcd_depletion_table.columns
+    assert "wife_target_age" not in snapshot.qcd_depletion_table.columns
+    assert "wife_required_qcd" not in snapshot.qcd_depletion_table.columns
+    assert "wife_actual_qcd" not in snapshot.qcd_depletion_table.columns
+    assert "wife_projected_balance_at_target_age" not in snapshot.qcd_depletion_table.columns
+    assert all(row[0] >= 2038 for row in snapshot.qcd_depletion_table.rows)
     qcd_row = next(row for row in snapshot.qcd_depletion_table.rows if row[0] == 2042)
     assert qcd_row[3] == 89
-    assert qcd_row[8] is None
+    assert qcd_row[-2] is True
+    assert qcd_row[-1] is False
     assert snapshot.mortgage_table.columns[0] == "year"
     assert snapshot.mortgage_table.columns[1] == "husband/wife ages"
     assert snapshot.mortgage_table.columns[2] == "monthly_payment"
@@ -120,9 +136,9 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert comparison.columns[0] == "metric"
 
 
-def test_stage_9_window_exposes_required_tabs():
+def test_stage_9_window_exposes_required_tabs(golden_loaded: ScenarioLoadResult):
     app = _app()
-    loaded = _baseline_loaded()
+    loaded = golden_loaded
     result = project_scenario(loaded.scenario, loaded.warnings)
     reporting = build_reporting_bundle(result, loaded.scenario)
     snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
@@ -136,17 +152,20 @@ def test_stage_9_window_exposes_required_tabs():
     assert tab_labels == [
         "Inputs",
         "Results Table",
+        "Cash Flow",
         "Retirement Activity",
         "QCD Depletion",
         "Mortgage",
         "Account Balances",
         "Calculation Details",
         "Charts",
+        "Historical Cohorts",
         "Roth Conversion Planner",
         "IRMAA Warnings",
         "Scenario Compare",
     ]
     assert window.results_table.rowCount() == len(snapshot.results_table.rows)
+    assert window.cashflow_table.rowCount() == len(snapshot.cashflow_table.rows)
     assert window.activity_table.rowCount() == len(snapshot.activity_table.rows)
     assert window.qcd_depletion_table.rowCount() == len(snapshot.qcd_depletion_table.rows)
     assert window.mortgage_table.rowCount() == len(snapshot.mortgage_table.rows)
@@ -176,3 +195,39 @@ def test_stage_9_window_exposes_required_tabs():
     assert window.mortgage_table.item(0, 2).text() == "3,528"
 
     window.close()
+
+
+def test_ui_snapshot_exposes_historical_cohort_results(golden_payload: dict):
+    payload = deepcopy(golden_payload)
+    payload["historical_analysis"] = {
+        "enabled": True,
+        "weighting": {
+            "method": "modern_heavier",
+            "modern_start_year": 1990,
+            "modern_weight_multiplier": 3.0,
+        },
+    }
+    loaded = load_scenario_text(yaml.safe_dump(payload, sort_keys=False))
+    analysis = analyze_historical_cohorts(loaded.scenario, loaded.warnings)
+    result = project_scenario(loaded.scenario, loaded.warnings)
+    reporting = build_reporting_bundle(result, loaded.scenario, analysis)
+
+    snapshot = build_ui_snapshot(
+        loaded.scenario,
+        result,
+        reporting,
+        loaded.warnings,
+        analysis,
+    )
+
+    assert analysis is not None
+    assert snapshot.historical_summary_rows[1] == (
+        "Weighted Success Rate",
+        f"{analysis.weighted_success_rate:.1%}",
+    )
+    assert snapshot.historical_summary_rows[2] == ("Target Success Rate", "90.0%")
+    assert snapshot.historical_cohorts_table.columns[0] == "start_year"
+    assert len(snapshot.historical_cohorts_table.rows) == analysis.cohort_count
+    assert len(snapshot.charts) == 5
+    assert snapshot.charts[-1].title == "Historical Cohort Terminal Net Worth"
+    assert '"historical_analysis": {' in snapshot.detail_summary_json

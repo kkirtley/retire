@@ -95,6 +95,15 @@ class ConversionStrategy(str, Enum):
     ADAPTIVE_LADDER = "adaptive_ladder"
 
 
+class HistoricalDataset(str, Enum):
+    DAMODARAN_US_ANNUAL_1970_2025 = "damodaran_us_annual_1970_2025"
+
+
+class HistoricalWeightingMethod(str, Enum):
+    EQUAL = "equal"
+    MODERN_HEAVIER = "modern_heavier"
+
+
 class MarketCondition(str, Enum):
     MARKET_DRAWDOWN = "market_drawdown"
     STRONG_MARKET = "strong_market"
@@ -278,6 +287,104 @@ class Assumptions(StrictBaseModel):
     def validate_rmd_config(self) -> "Assumptions":
         if self.rmd_start_age not in self.rmd_uniform_lifetime_table:
             raise ValueError("rmd_uniform_lifetime_table must include the configured rmd_start_age")
+        return self
+
+
+# ============================================================
+# Historical market analysis
+# ============================================================
+
+
+class HistoricalWeighting(StrictBaseModel):
+    method: HistoricalWeightingMethod = HistoricalWeightingMethod.EQUAL
+    modern_start_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+    modern_weight_multiplier: float = Field(default=1.0, ge=1.0)
+
+    @model_validator(mode="after")
+    def validate_modern_bias(self) -> "HistoricalWeighting":
+        if (
+            self.method == HistoricalWeightingMethod.MODERN_HEAVIER
+            and self.modern_start_year is None
+        ):
+            raise ValueError(
+                "historical_analysis.weighting.modern_start_year is required for modern_heavier weighting"
+            )
+        return self
+
+
+class AssetAllocation(StrictBaseModel):
+    stocks: float = Field(ge=0.0, le=1.0)
+    bonds: float = Field(ge=0.0, le=1.0)
+    cash: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_total_weight(self) -> "AssetAllocation":
+        total = self.stocks + self.bonds + self.cash
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError("asset allocation weights must sum to 1.0")
+        return self
+
+
+class GlidePathBand(StrictBaseModel):
+    start_age: int = Field(ge=0)
+    end_age: int = Field(ge=0)
+    allocation: AssetAllocation
+
+    @model_validator(mode="after")
+    def validate_age_range(self) -> "GlidePathBand":
+        if self.end_age < self.start_age:
+            raise ValueError("glide path band end_age must be on or after start_age")
+        return self
+
+
+class AccountTypeHistoricalPolicy(StrictBaseModel):
+    glide_path: List[GlidePathBand]
+
+    @model_validator(mode="after")
+    def validate_glide_path(self) -> "AccountTypeHistoricalPolicy":
+        sorted_bands = sorted(self.glide_path, key=lambda band: band.start_age)
+        for previous, current in pairwise(sorted_bands):
+            if previous.end_age >= current.start_age:
+                raise ValueError("historical glide path bands may not overlap")
+        return self
+
+
+class MarketAdjustmentBand(StrictBaseModel):
+    lower_return: Optional[float] = None
+    upper_return: Optional[float] = None
+    multiplier: float = Field(gt=0.0)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "MarketAdjustmentBand":
+        if self.lower_return is None and self.upper_return is None:
+            raise ValueError("market adjustment band must define lower_return or upper_return")
+        if (
+            self.lower_return is not None
+            and self.upper_return is not None
+            and self.lower_return > self.upper_return
+        ):
+            raise ValueError("market adjustment band lower_return must be <= upper_return")
+        return self
+
+
+class HistoricalAnalysis(StrictBaseModel):
+    enabled: bool = False
+    dataset: HistoricalDataset = HistoricalDataset.DAMODARAN_US_ANNUAL_1970_2025
+    selected_start_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+    success_rate_target: float = Field(default=0.90, ge=0.0, le=1.0)
+    use_historical_inflation_for_expenses: bool = True
+    use_historical_inflation_for_income_cola: bool = True
+    weighting: HistoricalWeighting = Field(default_factory=HistoricalWeighting)
+    account_type_return_policies: Dict[AccountType, AccountTypeHistoricalPolicy] = Field(
+        default_factory=dict
+    )
+
+    @model_validator(mode="after")
+    def validate_selected_start_year(self) -> "HistoricalAnalysis":
+        if not self.enabled and self.selected_start_year is not None:
+            raise ValueError(
+                "historical_analysis.selected_start_year must be null when historical_analysis.enabled is false"
+            )
         return self
 
 
@@ -487,7 +594,17 @@ class Account(StrictBaseModel):
 
 
 class SurplusAllocation(StrictBaseModel):
-    destination_account: str
+    enabled: bool = True
+    destination_account: Optional[str] = None
+    start_age_husband: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_destination_account(self) -> "SurplusAllocation":
+        if self.enabled and not self.destination_account:
+            raise ValueError(
+                "contributions.surplus_allocation.destination_account is required when surplus allocation is enabled"
+            )
+        return self
 
 
 class ContributionSchedule(StrictBaseModel):
@@ -538,9 +655,31 @@ class ContributionsConfig(StrictBaseModel):
 # ============================================================
 
 
+class ExpenseAdjustment(StrictBaseModel):
+    start_year: int = Field(ge=0)
+    end_year: int = Field(ge=0)
+    amount_annual: float = Field(ge=0.0)
+    inflation_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_year_range(self) -> "ExpenseAdjustment":
+        if self.end_year < self.start_year:
+            raise ValueError("expense adjustment end_year must be on or after start_year")
+        return self
+
+
 class InflatingAnnualExpense(StrictBaseModel):
     amount_annual: float = Field(ge=0.0)
     inflation_rate: float = Field(ge=0.0, le=1.0)
+    adjustments: List[ExpenseAdjustment] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_adjustments(self) -> "InflatingAnnualExpense":
+        sorted_adjustments = sorted(self.adjustments, key=lambda adjustment: adjustment.start_year)
+        for previous, current in pairwise(sorted_adjustments):
+            if previous.end_year >= current.start_year:
+                raise ValueError("expense adjustments may not overlap")
+        return self
 
 
 class DatedInflatingAnnualExpense(StrictBaseModel):
@@ -630,6 +769,8 @@ class TaxesConfig(StrictBaseModel):
 class StandardDeduction(StrictBaseModel):
     mfj: float = Field(ge=0.0)
     single: float = Field(ge=0.0)
+    additional_age65_mfj_per_person: float = Field(ge=0.0)
+    additional_age65_single: float = Field(ge=0.0)
 
 
 class TaxBracket(StrictBaseModel):
@@ -769,7 +910,28 @@ class MarketAdjustmentRule(StrictBaseModel):
 
 class MarketAdjustments(StrictBaseModel):
     enabled: bool
-    rules: List[MarketAdjustmentRule]
+    signal_account_type: AccountType = AccountType.TRADITIONAL_IRA
+    rules: List[MarketAdjustmentRule] = Field(default_factory=list)
+    bands: List[MarketAdjustmentBand] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_adjustment_config(self) -> "MarketAdjustments":
+        if self.enabled and not self.rules and not self.bands:
+            raise ValueError("market_adjustments requires rules or bands when enabled")
+
+        sorted_bands = sorted(
+            self.bands,
+            key=lambda band: float("-inf") if band.lower_return is None else band.lower_return,
+        )
+        previous_upper: Optional[float] = None
+        for band in sorted_bands:
+            lower = band.lower_return
+            upper = band.upper_return
+            if previous_upper is not None and lower is not None and lower < previous_upper:
+                raise ValueError("market adjustment bands may not overlap")
+            if upper is not None:
+                previous_upper = upper
+        return self
 
 
 class BalanceAdjustmentRule(StrictBaseModel):
@@ -997,10 +1159,15 @@ class RetirementScenario(StrictBaseModel):
     state_tax: StateTaxConfig
     medicare: MedicareConfig
     strategy: StrategyConfig
+    historical_analysis: HistoricalAnalysis = Field(default_factory=HistoricalAnalysis)
     overrides: Dict[str, Any]
 
     def _validate_account_references(self, account_names: set[str]) -> None:
-        if self.contributions.surplus_allocation.destination_account not in account_names:
+        surplus_allocation = self.contributions.surplus_allocation
+        if (
+            surplus_allocation.enabled
+            and surplus_allocation.destination_account not in account_names
+        ):
             raise ValueError(
                 "contributions.surplus_allocation.destination_account must refer to an existing account"
             )
@@ -1100,6 +1267,21 @@ class RetirementScenario(StrictBaseModel):
                     f"strategy.account_rollovers requires a roth_ira target for {owner.value}"
                 )
 
+    def _validate_historical_analysis(self) -> None:
+        if not self.historical_analysis.enabled:
+            return
+
+        configured_types = set(self.historical_analysis.account_type_return_policies)
+        missing_types = {
+            account.type for account in self.accounts if account.type not in configured_types
+        }
+        if missing_types:
+            missing_names = ", ".join(sorted(account_type.value for account_type in missing_types))
+            raise ValueError(
+                "historical_analysis.account_type_return_policies is missing account types: "
+                f"{missing_names}"
+            )
+
     @model_validator(mode="after")
     def validate_cross_references(self) -> "RetirementScenario":
         account_names = {account.name for account in self.accounts}
@@ -1111,6 +1293,7 @@ class RetirementScenario(StrictBaseModel):
         self._validate_withdrawal_strategy(account_names)
         self._validate_charitable_giving(account_names)
         self._validate_account_rollovers()
+        self._validate_historical_analysis()
 
         return self
 

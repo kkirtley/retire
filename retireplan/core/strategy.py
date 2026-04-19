@@ -5,11 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import ceil
 
-from retireplan.core.account_flow import annual_return_for_year
+from retireplan.core.market_history import (
+    account_type_return_for_period,
+    fixed_account_return_for_year,
+)
 from retireplan.core.timeline_builder import TimelinePeriod
 from retireplan.medicare.premiums import should_override_irmaa_conversion_guardrails
 from retireplan.scenario import Account, AccountOwner, AccountType, RetirementScenario
-from retireplan.tax import TaxSummary, calculate_tax_summary
+from retireplan.tax import TaxSummary, calculate_tax_summary, senior_standard_deduction_count
 
 
 @dataclass(frozen=True)
@@ -123,6 +126,7 @@ def execute_strategy(
     )
     conversion_tax_payment, conversion_tax_shortfall = _fund_conversion_tax_payment(
         scenario,
+        period,
         filing_status,
         income,
         roth_conversion_total,
@@ -149,6 +153,7 @@ def execute_strategy(
 
 def conversion_tax_impact(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     withdrawals: dict[str, float],
@@ -164,6 +169,13 @@ def conversion_tax_impact(
         income,
         withdrawals,
         extra_ordinary_income=0.0,
+        senior_standard_deduction_count=senior_standard_deduction_count(
+            filing_status,
+            husband_age=period.husband_age,
+            wife_age=period.wife_age,
+            husband_alive=period.husband_alive,
+            wife_alive=period.wife_alive,
+        ),
     )
     return round(total_tax_summary.total_tax - baseline.total_tax, 2)
 
@@ -463,7 +475,7 @@ def _weighted_expected_return(
         balance = balances.get(account.name, 0.0)
         if balance <= 0:
             continue
-        weighted_return += (balance / total_balance) * annual_return_for_year(
+        weighted_return += (balance / total_balance) * fixed_account_return_for_year(
             account, year, scenario
         )
     return weighted_return
@@ -503,6 +515,7 @@ def project_qcd_depletion_progress(
     if not qcd.enabled or not qcd.depletion_target.enabled:
         return ()
 
+    qcd_age = ceil(float(qcd.start_age))
     constrained = any("QCD depletion target fell short" in alert for alert in alerts)
     owner_rows: list[QCDDepletionOwnerProgress] = []
     for owner, age, alive in (
@@ -544,7 +557,11 @@ def project_qcd_depletion_progress(
         periods_remaining = max(owner_target_age - age, 0)
         annual_qcd_required = 0.0
         projected_balance = current_balance
-        if periods_remaining > 0 and current_balance > qcd.depletion_target.target_balance:
+        if (
+            age >= qcd_age
+            and periods_remaining > 0
+            and current_balance > qcd.depletion_target.target_balance
+        ):
             expected_return = _weighted_expected_return(
                 scenario,
                 year,
@@ -649,6 +666,7 @@ def _execute_roth_conversions(
 
 def _fund_conversion_tax_payment(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     roth_conversion_total: float,
@@ -663,6 +681,7 @@ def _fund_conversion_tax_payment(
     funding_withdrawals: dict[str, float] = {}
     required_tax_payment, _ = _fund_conversion_taxes_from_accounts(
         scenario,
+        period,
         filing_status,
         income,
         roth_conversion_total,
@@ -675,6 +694,7 @@ def _fund_conversion_tax_payment(
     if config.allow_roth_for_conversion_taxes:
         required_tax_payment, roth_funding = _fund_conversion_taxes_from_accounts(
             scenario,
+            period,
             filing_status,
             income,
             roth_conversion_total,
@@ -692,6 +712,7 @@ def _fund_conversion_tax_payment(
     if config.gross_up_conversion_if_needed:
         required_tax_payment, gross_up_funding = _fund_conversion_taxes_from_accounts(
             scenario,
+            period,
             filing_status,
             income,
             roth_conversion_total,
@@ -718,6 +739,7 @@ def _fund_conversion_tax_payment(
 
 def _fund_conversion_taxes_from_accounts(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     roth_conversion_total: float,
@@ -729,6 +751,7 @@ def _fund_conversion_taxes_from_accounts(
     used_withdrawals: dict[str, float] = {}
     required_tax_payment = _required_conversion_tax_payment(
         scenario,
+        period,
         filing_status,
         income,
         cash_withdrawals,
@@ -749,6 +772,7 @@ def _fund_conversion_taxes_from_accounts(
         _merge_amounts(used_withdrawals, next_funding)
         required_tax_payment = _required_conversion_tax_payment(
             scenario,
+            period,
             filing_status,
             income,
             cash_withdrawals,
@@ -761,6 +785,7 @@ def _fund_conversion_taxes_from_accounts(
 
 def _required_conversion_tax_payment(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     cash_withdrawals: dict[str, float],
@@ -773,6 +798,7 @@ def _required_conversion_tax_payment(
         _merge_amounts(projected_withdrawals, funding_withdrawals)
         return _estimate_incremental_conversion_tax(
             scenario,
+            period,
             filing_status,
             income,
             projected_withdrawals,
@@ -780,6 +806,7 @@ def _required_conversion_tax_payment(
         )
     return _estimate_conversion_only_tax(
         scenario,
+        period,
         filing_status,
         income,
         projected_withdrawals,
@@ -789,6 +816,7 @@ def _required_conversion_tax_payment(
 
 def _estimate_incremental_conversion_tax(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     withdrawals: dict[str, float],
@@ -800,6 +828,13 @@ def _estimate_incremental_conversion_tax(
         income,
         withdrawals,
         extra_ordinary_income=roth_conversion_total,
+        senior_standard_deduction_count=senior_standard_deduction_count(
+            filing_status,
+            husband_age=period.husband_age,
+            wife_age=period.wife_age,
+            husband_alive=period.husband_alive,
+            wife_alive=period.wife_alive,
+        ),
     )
     without_conversion = calculate_tax_summary(
         scenario,
@@ -807,12 +842,20 @@ def _estimate_incremental_conversion_tax(
         income,
         withdrawals,
         extra_ordinary_income=0.0,
+        senior_standard_deduction_count=senior_standard_deduction_count(
+            filing_status,
+            husband_age=period.husband_age,
+            wife_age=period.wife_age,
+            husband_alive=period.husband_alive,
+            wife_alive=period.wife_alive,
+        ),
     )
     return round(max(with_conversion.total_tax - without_conversion.total_tax, 0.0), 2)
 
 
 def _estimate_conversion_only_tax(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     filing_status: str,
     income: dict[str, float],
     withdrawals: dict[str, float],
@@ -820,6 +863,7 @@ def _estimate_conversion_only_tax(
 ) -> float:
     return _estimate_incremental_conversion_tax(
         scenario,
+        period,
         filing_status,
         income,
         withdrawals,
@@ -987,7 +1031,13 @@ def _apply_market_adjustments(
     if not config.enabled:
         return amount
 
-    market_return = annual_return_for_year(scenario.accounts[0], period.year, scenario)
+    market_return = account_type_return_for_period(config.signal_account_type, period, scenario)
+    for band in config.bands:
+        lower_ok = band.lower_return is None or market_return >= float(band.lower_return)
+        upper_ok = band.upper_return is None or market_return <= float(band.upper_return)
+        if lower_ok and upper_ok:
+            return amount * float(band.multiplier)
+
     adjusted = amount
     for rule in config.rules:
         if rule.condition == "market_drawdown" and market_return <= float(rule.threshold):
@@ -1122,6 +1172,13 @@ def _conversion_allowed(
         income,
         cash_withdrawals,
         extra_ordinary_income=conversion_amount,
+        senior_standard_deduction_count=senior_standard_deduction_count(
+            filing_status,
+            husband_age=period.husband_age,
+            wife_age=period.wife_age,
+            husband_alive=period.husband_alive,
+            wife_alive=period.wife_alive,
+        ),
     )
     max_bracket = float(scenario.strategy.roth_conversions.tax_constraints.max_marginal_bracket)
     if (

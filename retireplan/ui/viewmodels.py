@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from retireplan.core import ProjectionResult
+from retireplan.core.historical_analysis import HistoricalAnalysisResult
 from retireplan.mortgage import build_mortgage_schedule
 from retireplan.output_formatting import round_output_value
 from retireplan.scenario import RetirementScenario
@@ -40,6 +41,7 @@ class UiProjectionSnapshot:
     warnings: tuple[str, ...]
     summary_rows: tuple[tuple[str, str], ...]
     results_table: UiTableModel
+    cashflow_table: UiTableModel
     activity_table: UiTableModel
     qcd_depletion_table: UiTableModel
     mortgage_table: UiTableModel
@@ -47,6 +49,8 @@ class UiProjectionSnapshot:
     account_balance_tables: tuple[UiNamedTable, ...]
     roth_planner_table: UiTableModel
     irmaa_table: UiTableModel
+    historical_summary_rows: tuple[tuple[str, str], ...]
+    historical_cohorts_table: UiTableModel
     charts: tuple[UiChartModel, ...]
     detail_years: tuple[int, ...]
     detail_json_by_year: dict[int, str]
@@ -82,6 +86,7 @@ def _detail_summary_json(
     result: ProjectionResult,
     reporting: dict[str, Any],
     warnings: list[str] | tuple[str, ...],
+    historical_analysis: HistoricalAnalysisResult | None,
 ) -> str:
     payload = {
         "scenario_name": result.scenario_name,
@@ -91,6 +96,11 @@ def _detail_summary_json(
         "warnings": list(warnings),
         "summary": result.summary,
         "reporting_summary": reporting["summary"],
+        "historical_analysis": (
+            None
+            if historical_analysis is None
+            else round_output_value(historical_analysis.to_dict())
+        ),
     }
     return json.dumps(round_output_value(payload), indent=2)
 
@@ -100,6 +110,7 @@ def build_ui_snapshot(
     result: ProjectionResult,
     reporting: dict[str, Any],
     warnings: list[str] | tuple[str, ...],
+    historical_analysis: HistoricalAnalysisResult | None = None,
 ) -> UiProjectionSnapshot:
     summary_rows = (
         ("Scenario", f"{result.scenario_name} v{result.version}"),
@@ -128,8 +139,9 @@ def build_ui_snapshot(
             reporting["tables"]["yearly_overview"],
             excluded_columns=("husband_age", "wife_age"),
         ),
+        cashflow_table=_table_from_reporting(reporting["tables"]["cashflow"]),
         activity_table=_activity_table(result),
-        qcd_depletion_table=_table_from_reporting(
+        qcd_depletion_table=_qcd_depletion_table(
             reporting["tables"].get("qcd_depletion", {"columns": (), "rows": ()})
         ),
         mortgage_table=_mortgage_table(result, scenario),
@@ -137,10 +149,19 @@ def build_ui_snapshot(
         account_balance_tables=account_balance_tables,
         roth_planner_table=_roth_planner_table(result),
         irmaa_table=_irmaa_table(result),
+        historical_summary_rows=_historical_summary_rows(historical_analysis),
+        historical_cohorts_table=_historical_cohorts_table(
+            reporting["tables"].get("historical_cohorts", {"columns": (), "rows": ()})
+        ),
         charts=_charts_from_reporting(reporting["charts"]),
         detail_years=tuple(row.year for row in result.ledger),
         detail_json_by_year=_detail_json_by_year(result),
-        detail_summary_json=_detail_summary_json(result, reporting, warnings),
+        detail_summary_json=_detail_summary_json(
+            result,
+            reporting,
+            warnings,
+            historical_analysis,
+        ),
         raw_summary=round_output_value(result.summary),
     )
 
@@ -185,6 +206,22 @@ def _table_from_reporting(
     columns = tuple(column for column in table["columns"] if column not in excluded_columns)
     rows = tuple(tuple(row[column] for column in columns) for row in table["rows"])
     return UiTableModel(columns=columns, rows=rows)
+
+
+def _qcd_depletion_table(table: dict[str, Any]) -> UiTableModel:
+    wife_columns = (
+        "wife_balance",
+        "wife_target_age",
+        "wife_required_qcd",
+        "wife_actual_qcd",
+        "wife_projected_balance_at_target_age",
+    )
+    rows = table.get("rows", ())
+    if rows and all(
+        all(row.get(column) in (None, 0, 0.0, "") for column in wife_columns) for row in rows
+    ):
+        return _table_from_reporting(table, excluded_columns=wife_columns)
+    return _table_from_reporting(table)
 
 
 def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
@@ -371,7 +408,7 @@ def _account_balances_table(
     )
     surplus_destination = scenario.contributions.surplus_allocation.destination_account
     surplus_column = ()
-    if surplus_destination in selected_account_names:
+    if surplus_destination and surplus_destination in selected_account_names:
         surplus_column = (f"surplus to {surplus_destination}",)
     columns = ("year", "husband/wife ages") + surplus_column + selected_account_names
     rows = []
@@ -404,6 +441,38 @@ def _irmaa_table(result: ProjectionResult) -> UiTableModel:
             round_output_value((row.year, row.husband_age, row.wife_age, irmaa_tier, irmaa_alerts))
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
+
+
+def _historical_summary_rows(
+    historical_analysis: HistoricalAnalysisResult | None,
+) -> tuple[tuple[str, str], ...]:
+    if historical_analysis is None:
+        return (("Historical Analysis", "Not enabled"),)
+
+    return (
+        ("Dataset", historical_analysis.dataset),
+        ("Weighted Success Rate", _format_percent(historical_analysis.weighted_success_rate)),
+        ("Target Success Rate", _format_percent(historical_analysis.target_success_rate)),
+        (
+            "Passes Target",
+            _format_value(historical_analysis.passes_target),
+        ),
+        ("Cohort Count", _format_value(historical_analysis.cohort_count)),
+        (
+            "Best Terminal Start Year",
+            _format_value(historical_analysis.best_terminal_start_year),
+        ),
+        (
+            "Worst Terminal Start Year",
+            _format_value(historical_analysis.worst_terminal_start_year),
+        ),
+    )
+
+
+def _historical_cohorts_table(table: dict[str, Any]) -> UiTableModel:
+    if not table.get("columns"):
+        return UiTableModel(columns=("status",), rows=(("Historical analysis not enabled",),))
+    return _table_from_reporting(table)
 
 
 def _charts_from_reporting(charts: dict[str, Any]) -> tuple[UiChartModel, ...]:
@@ -440,6 +509,10 @@ def _format_value(value: object) -> str:
     if isinstance(value, float):
         return f"{value:,.0f}"
     return str(value)
+
+
+def _format_percent(value: float) -> str:
+    return f"{value:.1%}"
 
 
 def _ages_label(husband_age: int, wife_age: int) -> str:

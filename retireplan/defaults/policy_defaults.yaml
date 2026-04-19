@@ -33,6 +33,8 @@ federal_tax:
   standard_deduction:
     mfj: 30000.00
     single: 15000.00
+    additional_age65_mfj_per_person: 1600.00
+    additional_age65_single: 2000.00
 
   brackets:
     mfj:
@@ -87,3 +89,92 @@ medicare:
 taxes:
   conversion_tax_payment:
     treatment: "annual_cash_outflow_same_year"
+
+historical_analysis:
+  enabled: false
+  dataset: damodaran_us_annual_1970_2025
+  selected_start_year:
+  success_rate_target: 0.90
+  use_historical_inflation_for_expenses: true
+  use_historical_inflation_for_income_cola: true
+  weighting:
+    method: equal
+    modern_start_year: 1990
+    modern_weight_multiplier: 2.0
+  account_type_return_policies:
+    traditional_ira:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.70, bonds: 0.25, cash: 0.05 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.60, bonds: 0.35, cash: 0.05 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.45, bonds: 0.45, cash: 0.10 }
+    traditional_401k:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.70, bonds: 0.25, cash: 0.05 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.60, bonds: 0.35, cash: 0.05 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.45, bonds: 0.45, cash: 0.10 }
+    roth_ira:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.85, bonds: 0.10, cash: 0.05 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.75, bonds: 0.20, cash: 0.05 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.60, bonds: 0.30, cash: 0.10 }
+    roth_401k:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.85, bonds: 0.10, cash: 0.05 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.75, bonds: 0.20, cash: 0.05 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.60, bonds: 0.30, cash: 0.10 }
+    hsa:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.80, bonds: 0.15, cash: 0.05 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.65, bonds: 0.25, cash: 0.10 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.50, bonds: 0.35, cash: 0.15 }
+    taxable:
+      glide_path:
+        - start_age: 0
+          end_age: 64
+          allocation: { stocks: 0.60, bonds: 0.30, cash: 0.10 }
+        - start_age: 65
+          end_age: 74
+          allocation: { stocks: 0.50, bonds: 0.35, cash: 0.15 }
+        - start_age: 75
+          end_age: 120
+          allocation: { stocks: 0.35, bonds: 0.45, cash: 0.20 }
+    cash:
+      glide_path:
+        - start_age: 0
+          end_age: 120
+          allocation: { stocks: 0.00, bonds: 0.00, cash: 1.00 }
+    restricted_cash:
+      glide_path:
+        - start_age: 0
+          end_age: 120
+          allocation: { stocks: 0.00, bonds: 0.00, cash: 1.00 }

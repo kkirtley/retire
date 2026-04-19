@@ -1,12 +1,8 @@
-from pathlib import Path
-
 from retireplan.core import TimelineEvent, build_timeline
-from retireplan.io import load_scenario
 
 
-def test_timeline_builder_creates_prorated_first_year_and_events():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
+def test_timeline_builder_creates_prorated_first_year_and_events(golden_loaded):
+    loaded = golden_loaded
 
     timeline = build_timeline(loaded.scenario)
 
@@ -16,12 +12,11 @@ def test_timeline_builder_creates_prorated_first_year_and_events():
     assert round(timeline[0].fraction_of_year, 4) == round(184 / 365, 4)
     assert TimelineEvent.SCENARIO_START in timeline[0].events
     assert timeline[0].has_event(TimelineEvent.HUSBAND_EARNED_INCOME_ACTIVE)
-    assert timeline[-1].wife_age == 100
+    assert timeline[-1].wife_age == loaded.scenario.simulation.end_condition.wife_age
 
 
-def test_timeline_builder_marks_retirement_and_medicare_milestones():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    loaded = load_scenario(scenario_path)
+def test_timeline_builder_marks_retirement_and_medicare_milestones(golden_loaded):
+    loaded = golden_loaded
 
     timeline = build_timeline(loaded.scenario)
     by_year = {period.year: period for period in timeline}

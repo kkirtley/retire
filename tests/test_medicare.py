@@ -1,18 +1,11 @@
 from copy import deepcopy
-from pathlib import Path
 
 from retireplan.core import build_timeline, project_scenario
-from retireplan.io import load_scenario
 from retireplan.medicare import calculate_medicare_summary
 
 
-def _baseline_scenario():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    return load_scenario(scenario_path).scenario
-
-
-def test_medicare_base_premiums_begin_at_age_sixty_five():
-    scenario = _baseline_scenario()
+def test_medicare_base_premiums_begin_at_age_sixty_five(golden_scenario):
+    scenario = golden_scenario
     period = next(item for item in build_timeline(scenario) if item.year == 2032)
 
     summary = calculate_medicare_summary(
@@ -28,8 +21,8 @@ def test_medicare_base_premiums_begin_at_age_sixty_five():
     assert summary.irmaa_tier == 0
 
 
-def test_irmaa_uses_two_year_lookback_with_single_thresholds():
-    scenario = _baseline_scenario()
+def test_irmaa_uses_two_year_lookback_with_single_thresholds(golden_scenario):
+    scenario = golden_scenario
     scenario.household.husband.modeled_death.enabled = True
     scenario.household.husband.modeled_death.death_year = 2034
     period = next(item for item in build_timeline(scenario) if item.year == 2037)
@@ -49,8 +42,8 @@ def test_irmaa_uses_two_year_lookback_with_single_thresholds():
     assert summary.alerts
 
 
-def test_irmaa_reconsideration_can_use_current_year_magi_after_retirement():
-    scenario = _baseline_scenario()
+def test_irmaa_reconsideration_can_use_current_year_magi_after_retirement(golden_scenario):
+    scenario = golden_scenario
     period = next(item for item in build_timeline(scenario) if item.year == 2033)
 
     summary = calculate_medicare_summary(
@@ -71,8 +64,8 @@ def test_irmaa_reconsideration_can_use_current_year_magi_after_retirement():
     )
 
 
-def test_projection_adds_medicare_costs_and_irmaa_alerts():
-    scenario = deepcopy(_baseline_scenario())
+def test_projection_adds_medicare_costs_and_irmaa_alerts(golden_scenario):
+    scenario = deepcopy(golden_scenario)
 
     result = project_scenario(scenario)
     rows = {row.year: row for row in result.ledger}

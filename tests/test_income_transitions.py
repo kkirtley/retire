@@ -1,17 +1,10 @@
 from copy import deepcopy
-from pathlib import Path
 
 from retireplan.core import project_scenario
-from retireplan.io import load_scenario
 
 
-def _baseline_scenario():
-    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
-    return load_scenario(scenario_path).scenario
-
-
-def test_survivor_transition_applies_single_status_expense_stepdown_and_ss_step_up():
-    scenario = deepcopy(_baseline_scenario())
+def test_survivor_transition_applies_single_status_expense_stepdown_and_ss_step_up(golden_scenario):
+    scenario = deepcopy(golden_scenario)
     scenario.household.husband.modeled_death.enabled = True
     scenario.household.husband.modeled_death.death_year = 2040
 
@@ -41,8 +34,8 @@ def test_survivor_transition_applies_single_status_expense_stepdown_and_ss_step_
     assert survivor.expenses["base_living"] == expected_survivor_base_living
 
 
-def test_va_survivor_benefit_does_not_start_when_death_precedes_eligibility_rule():
-    scenario = deepcopy(_baseline_scenario())
+def test_va_survivor_benefit_does_not_start_when_death_precedes_eligibility_rule(golden_scenario):
+    scenario = deepcopy(golden_scenario)
     scenario.household.husband.modeled_death.enabled = True
     scenario.household.husband.modeled_death.death_year = 2034
 
