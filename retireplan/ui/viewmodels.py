@@ -230,6 +230,7 @@ def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
         "husband/wife ages",
         "roth_conversion_total",
         "conversion_tax_impact",
+        "effective_tax_rate",
         "conversion_tax_payment",
         "conversion_tax_shortfall",
         "irmaa_tier",
@@ -252,6 +253,7 @@ def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
                     _ages_label(row.husband_age, row.wife_age),
                     row.strategy.get("roth_conversion_total", 0.0),
                     row.strategy.get("conversion_tax_impact", 0.0),
+                    _effective_conversion_tax_rate_label(row),
                     row.strategy.get("conversion_tax_payment", 0.0),
                     row.strategy.get("conversion_tax_shortfall", 0.0),
                     row.medicare.get("irmaa_tier", 0.0),
@@ -473,6 +475,14 @@ def _historical_cohorts_table(table: dict[str, Any]) -> UiTableModel:
     if not table.get("columns"):
         return UiTableModel(columns=("status",), rows=(("Historical analysis not enabled",),))
     return _table_from_reporting(table)
+
+
+def _effective_conversion_tax_rate_label(row) -> str:
+    conversion_total = float(row.strategy.get("roth_conversion_total", 0.0))
+    if conversion_total <= 0:
+        return "n/a"
+    conversion_tax_impact = float(row.strategy.get("conversion_tax_impact", 0.0))
+    return _format_percent(conversion_tax_impact / conversion_total)
 
 
 def _charts_from_reporting(charts: dict[str, Any]) -> tuple[UiChartModel, ...]:

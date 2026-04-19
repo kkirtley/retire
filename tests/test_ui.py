@@ -114,15 +114,17 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     assert transposed_husband_table.rows[1][0] == "Husband Traditional IRA"
     assert snapshot.roth_planner_table.columns[0] == "year"
     assert snapshot.roth_planner_table.columns[1] == "husband/wife ages"
+    assert "effective_tax_rate" in snapshot.roth_planner_table.columns
     assert "irmaa_tier" in snapshot.roth_planner_table.columns
     assert "medicare_total" in snapshot.roth_planner_table.columns
     assert "planner_notes" in snapshot.roth_planner_table.columns
     first_planner_row = snapshot.roth_planner_table.rows[0]
     assert first_planner_row[0] == 2033
     assert first_planner_row[1] == "66 / 66"
-    assert first_planner_row[6] == 0.0
-    assert first_planner_row[7] == 5026
-    assert "current-year MAGI via work_stoppage reconsideration" in first_planner_row[8]
+    assert first_planner_row[4] == "18.0%"
+    assert first_planner_row[7] == 0.0
+    assert first_planner_row[8] == 5026
+    assert "current-year MAGI via work_stoppage reconsideration" in first_planner_row[9]
     assert snapshot.irmaa_table.columns[0] == "year"
     assert len(snapshot.charts) == 4
     assert all(chart.x_axis == "age" for chart in snapshot.charts)

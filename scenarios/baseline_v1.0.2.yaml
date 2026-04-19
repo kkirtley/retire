@@ -1,6 +1,6 @@
 metadata:
-  scenario_name: "baseline"
-  version: "1.0.1"
+  scenario_name: "Add 70 Conversion"
+  version: "1.0.2"
   description: "Deterministic retirement planning baseline with adaptive Roth
     conversion ladder, QCD giving engine, bridge account, mortgage payoff
     targeting, and locked household assumptions"
@@ -460,10 +460,10 @@ strategy:
       reduction_percent: 0.75
 
     safety_limits:
-      max_conversion: 175000.00
+      max_conversion: 140000.00
       min_conversion:
         type: "floor_with_tax_guard"
-        base: 100000.00
+        base: 80000.00
         reduce_if_exceeds_bracket: true
         enforce_only_when_target_not_at_risk: true
 
