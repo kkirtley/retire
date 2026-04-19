@@ -33,8 +33,9 @@ def test_run_command_writes_projection_file(tmp_path: Path):
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario"]["version"] == "1.0.1"
-    assert payload["summary"]["terminal_net_worth"] >= 0.0
+    assert payload["summary"]["terminal_net_worth"] >= 0
     assert payload["summary"]["failure_year_if_any"] is None
+    assert isinstance(payload["summary"]["terminal_net_worth"], int)
     assert payload["reporting"]["charts"]["total_liquid_net_worth"]["series"]
     assert "yearly_overview" in payload["report_exports"]["tables"]
     assert payload["ledger"]

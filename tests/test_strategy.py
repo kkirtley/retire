@@ -71,13 +71,15 @@ def test_qcd_can_satisfy_rmd_before_taxable_distribution_when_conversions_disabl
     baseline_row = next(row for row in baseline.ledger if row.year == 2042)
     no_qcd_row = next(row for row in no_qcd.ledger if row.year == 2042)
 
-    assert baseline_row.strategy["rmd_total"] == 2226.63
-    assert baseline_row.strategy["qcd_total"] == 2226.63
+    assert baseline_row.strategy["rmd_total"] == 32990.17
+    assert baseline_row.strategy["qcd_total"] == 74312.18
     assert baseline_row.strategy["taxable_rmd_total"] == 0.0
+    assert round(sum(baseline_row.qcd_distributions.values()), 2) == 74312.18
     assert no_qcd_row.strategy["qcd_total"] == 0.0
-    assert no_qcd_row.strategy["taxable_rmd_total"] == 2226.63
-    assert no_qcd_row.withdrawals["Wife Traditional IRA"] > baseline_row.withdrawals.get(
-        "Wife Traditional IRA", 0.0
+    assert no_qcd_row.strategy["taxable_rmd_total"] == 46661.29
+    assert no_qcd_row.qcd_distributions == {}
+    assert no_qcd_row.withdrawals["Husband Traditional IRA"] > baseline_row.withdrawals.get(
+        "Husband Traditional IRA", 0.0
     )
 
 
@@ -92,11 +94,25 @@ def test_charitable_giving_can_spill_into_standard_cashflow_when_allowed():
     result = project_scenario(scenario)
     row = next(item for item in result.ledger if item.year == 2042)
 
-    assert row.strategy["qcd_total"] == 2226.63
+    assert row.strategy["qcd_total"] == 5000.0
+    assert sum(row.qcd_distributions.values()) == 5000.0
+    assert row.strategy["charitable_giving_total"] == 45741.45
+    assert row.strategy["taxable_giving"] == 40741.45
     assert row.strategy["taxable_giving"] > 0.0
     assert row.strategy["charitable_giving_total"] > row.strategy["taxable_giving"]
     assert row.expenses["charitable_giving"] == row.strategy["taxable_giving"]
     assert any("Funded" in alert and "charitable giving" in alert for alert in row.alerts)
+
+
+def test_qcd_depletion_target_zeros_traditional_balances_by_wife_age_ninety():
+    scenario = _baseline_scenario()
+
+    result = project_scenario(scenario)
+    wife_age_ninety_row = next(item for item in result.ledger if item.wife_age == 90)
+
+    assert wife_age_ninety_row.account_balances_end["Husband Traditional IRA"] == 0.0
+    assert wife_age_ninety_row.account_balances_end["Wife Traditional IRA"] == 0.0
+    assert wife_age_ninety_row.strategy["qcd_total"] == 3443.83
 
 
 def test_conversion_can_drop_below_minimum_to_preserve_age_seventy_target():

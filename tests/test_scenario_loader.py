@@ -16,6 +16,9 @@ def test_load_baseline_scenario_and_collect_warnings():
     assert loaded.warnings == []
     assert loaded.scenario.assumptions.rmd_uniform_lifetime_table[75] == 24.6
     assert loaded.scenario.strategy.account_rollovers.enabled is True
+    assert loaded.scenario.strategy.charitable_giving.qcd.allow_above_rmd is True
+    assert loaded.scenario.strategy.charitable_giving.qcd.depletion_target.enabled is True
+    assert loaded.scenario.strategy.charitable_giving.qcd.depletion_target.target_age == 90
 
 
 def test_loader_applies_shared_defaults_when_scenario_omits_policy_table(tmp_path: Path):
@@ -55,4 +58,16 @@ def test_loader_rejects_rollover_without_matching_ira_target(tmp_path: Path):
     temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
     with pytest.raises(ValueError, match="traditional_ira target for Wife"):
+        load_scenario(temp_path)
+
+
+def test_loader_rejects_qcd_depletion_target_without_above_rmd(tmp_path: Path):
+    scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
+    payload = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
+    payload["strategy"]["charitable_giving"]["qcd"]["allow_above_rmd"] = False
+
+    temp_path = tmp_path / "invalid-qcd-depletion.yaml"
+    temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="allow_above_rmd=true"):
         load_scenario(temp_path)

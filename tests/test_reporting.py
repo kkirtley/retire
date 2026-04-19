@@ -9,13 +9,13 @@ from retireplan.reporting import build_reporting_bundle, write_reporting_bundle
 def _baseline_result():
     scenario_path = Path(__file__).resolve().parents[1] / "scenarios" / "baseline_v1.0.1.yaml"
     loaded = load_scenario(scenario_path)
-    return project_scenario(loaded.scenario, loaded.warnings)
+    return loaded, project_scenario(loaded.scenario, loaded.warnings)
 
 
 def test_reporting_bundle_contains_stage_8_tables_and_charts():
-    result = _baseline_result()
+    loaded, result = _baseline_result()
 
-    bundle = build_reporting_bundle(result)
+    bundle = build_reporting_bundle(result, loaded.scenario)
 
     assert bundle["summary"]["rows"] == len(result.ledger)
     assert set(bundle["tables"]) == {
@@ -23,6 +23,7 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
         "cashflow",
         "tax_detail",
         "account_balances",
+        "qcd_depletion",
     }
     assert set(bundle["charts"]) == {
         "total_liquid_net_worth",
@@ -34,20 +35,38 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
     assert bundle["tables"]["yearly_overview"]["columns"][1] == "husband/wife ages"
     assert "rollover_total" in bundle["tables"]["yearly_overview"]["columns"]
     assert "roth_conversion_total" in bundle["tables"]["yearly_overview"]["columns"]
+    assert "qcd_distribution_total" in bundle["tables"]["yearly_overview"]["columns"]
     retirement_row = next(
         row for row in bundle["tables"]["yearly_overview"]["rows"] if row["year"] == 2033
     )
     assert retirement_row["husband/wife ages"] == "66 / 66"
-    assert retirement_row["rollover_total"] == 200491.27
-    assert retirement_row["roth_conversion_total"] == 160000.0
-    assert bundle["charts"]["total_liquid_net_worth"]["series"][0]["points"][-1]["value"] == (
+    assert retirement_row["rollover_total"] == 200491
+    assert retirement_row["roth_conversion_total"] == 160000
+    account_balance_chart = bundle["charts"]["account_balances_stacked"]
+    assert account_balance_chart["x_axis"] == "age"
+    assert account_balance_chart["y_axis_step"] % 50000 == 0
+    assert account_balance_chart["series"][0]["points"][0]["age"] == result.ledger[0].wife_age
+    qcd_depletion_row = next(
+        row for row in bundle["tables"]["qcd_depletion"]["rows"] if row["year"] == 2042
+    )
+    assert qcd_depletion_row["husband_target_age"] == 89
+    assert qcd_depletion_row["wife_target_age"] == 90
+    assert qcd_depletion_row["on_pace"] is True
+    assert [series["name"] for series in account_balance_chart["series"]] == [
+        "Husband Traditional",
+        "Husband Roth",
+        "Wife Traditional",
+        "Wife Roth",
+        "Taxable",
+    ]
+    assert bundle["charts"]["total_liquid_net_worth"]["series"][0]["points"][-1]["value"] == round(
         result.summary["terminal_net_worth"]
     )
 
 
 def test_reporting_bundle_writes_json_and_csv_exports(tmp_path: Path):
-    result = _baseline_result()
-    bundle = build_reporting_bundle(result)
+    loaded, result = _baseline_result()
+    bundle = build_reporting_bundle(result, loaded.scenario)
 
     manifest = write_reporting_bundle(bundle, tmp_path)
 
@@ -61,9 +80,11 @@ def test_reporting_bundle_writes_json_and_csv_exports(tmp_path: Path):
         "cashflow",
         "tax_detail",
         "account_balances",
+        "qcd_depletion",
     }
     assert reporting_payload["summary"]["scenario_name"] == result.scenario_name
     assert "taxes_over_time" in chart_payload
+    assert chart_payload["taxes_over_time"]["x_axis"] == "age"
     assert (tmp_path / "yearly_overview.csv").exists()
     assert (tmp_path / "cashflow.csv").exists()
     assert (tmp_path / "tax_detail.csv").exists()

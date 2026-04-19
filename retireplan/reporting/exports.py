@@ -8,22 +8,30 @@ from pathlib import Path
 from typing import Any
 
 from retireplan.core import ProjectionResult
+from retireplan.core.strategy import project_qcd_depletion_progress
+from retireplan.output_formatting import round_output_value
+from retireplan.scenario import RetirementScenario
 
 
-def build_reporting_bundle(result: ProjectionResult) -> dict[str, Any]:
+def build_reporting_bundle(
+    result: ProjectionResult,
+    scenario: RetirementScenario | None = None,
+) -> dict[str, Any]:
     tables = {
         "yearly_overview": _yearly_overview_table(result),
         "cashflow": _cashflow_table(result),
         "tax_detail": _tax_detail_table(result),
         "account_balances": _account_balances_table(result),
     }
+    if scenario is not None:
+        tables["qcd_depletion"] = _qcd_depletion_table(result, scenario)
     charts = {
         "total_liquid_net_worth": _liquid_net_worth_chart(result),
         "income_vs_expenses": _income_vs_expenses_chart(result),
         "taxes_over_time": _taxes_chart(result),
         "account_balances_stacked": _account_balances_chart(result),
     }
-    return {
+    bundle = {
         "summary": {
             "scenario_name": result.scenario_name,
             "version": result.version,
@@ -34,6 +42,7 @@ def build_reporting_bundle(result: ProjectionResult) -> dict[str, Any]:
         "tables": tables,
         "charts": charts,
     }
+    return round_output_value(bundle)
 
 
 def write_reporting_bundle(bundle: dict[str, Any], output_dir: Path) -> dict[str, Any]:
@@ -70,6 +79,7 @@ def _yearly_overview_table(result: ProjectionResult) -> dict[str, Any]:
         "taxes_total",
         "rollover_total",
         "roth_conversion_total",
+        "qcd_distribution_total",
         "net_cash_flow",
         "liquid_resources_end",
         "success",
@@ -88,6 +98,7 @@ def _yearly_overview_table(result: ProjectionResult) -> dict[str, Any]:
                 "taxes_total": row.taxes.get("total", 0.0),
                 "rollover_total": round(sum(row.rollovers.values()), 2),
                 "roth_conversion_total": row.strategy.get("roth_conversion_total", 0.0),
+                "qcd_distribution_total": round(sum(row.qcd_distributions.values()), 2),
                 "net_cash_flow": row.net_cash_flow,
                 "liquid_resources_end": row.liquid_resources_end,
                 "success": row.success,
@@ -104,6 +115,7 @@ def _cashflow_table(result: ProjectionResult) -> dict[str, Any]:
         "total_taxes",
         "total_contributions",
         "total_withdrawals",
+        "total_qcd_distributions",
         "net_cash_flow",
     ]
     rows = []
@@ -116,10 +128,91 @@ def _cashflow_table(result: ProjectionResult) -> dict[str, Any]:
                 "total_taxes": row.taxes.get("total", 0.0),
                 "total_contributions": round(sum(row.contributions.values()), 2),
                 "total_withdrawals": round(sum(row.withdrawals.values()), 2),
+                "total_qcd_distributions": round(sum(row.qcd_distributions.values()), 2),
                 "net_cash_flow": row.net_cash_flow,
             }
         )
     return {"columns": columns, "rows": rows}
+
+
+def _qcd_depletion_table(
+    result: ProjectionResult,
+    scenario: RetirementScenario,
+) -> dict[str, Any]:
+    columns = [
+        "year",
+        "husband/wife ages",
+        "husband_balance",
+        "husband_target_age",
+        "husband_required_qcd",
+        "husband_actual_qcd",
+        "husband_projected_balance_at_target_age",
+        "wife_balance",
+        "wife_target_age",
+        "wife_required_qcd",
+        "wife_actual_qcd",
+        "wife_projected_balance_at_target_age",
+        "on_pace",
+        "constrained",
+    ]
+    rows = []
+    for row in result.ledger:
+        owner_progress = {
+            progress.owner: progress
+            for progress in project_qcd_depletion_progress(
+                scenario,
+                year=row.year,
+                husband_age=row.husband_age,
+                wife_age=row.wife_age,
+                husband_alive=row.husband_alive,
+                wife_alive=row.wife_alive,
+                account_balances_end=row.account_balances_end,
+                qcd_distributions=row.qcd_distributions,
+                alerts=row.alerts,
+            )
+        }
+        if not owner_progress:
+            continue
+        husband = owner_progress.get("Husband")
+        wife = owner_progress.get("Wife")
+        rows.append(
+            {
+                "year": row.year,
+                "husband/wife ages": f"{row.husband_age} / {row.wife_age}",
+                "husband_balance": 0.0 if husband is None else husband.current_balance,
+                "husband_target_age": None if husband is None else husband.target_age,
+                "husband_required_qcd": 0.0 if husband is None else husband.annual_qcd_required,
+                "husband_actual_qcd": 0.0 if husband is None else husband.actual_qcd,
+                "husband_projected_balance_at_target_age": (
+                    0.0 if husband is None else husband.projected_balance_at_target_age
+                ),
+                "wife_balance": 0.0 if wife is None else wife.current_balance,
+                "wife_target_age": None if wife is None else wife.target_age,
+                "wife_required_qcd": 0.0 if wife is None else wife.annual_qcd_required,
+                "wife_actual_qcd": 0.0 if wife is None else wife.actual_qcd,
+                "wife_projected_balance_at_target_age": (
+                    0.0 if wife is None else wife.projected_balance_at_target_age
+                ),
+                "on_pace": all(progress.on_pace for progress in owner_progress.values()),
+                "constrained": any(progress.constrained for progress in owner_progress.values()),
+            }
+        )
+    return {"columns": columns, "rows": rows}
+
+
+def _chart_axis_step(values: list[float]) -> float:
+    if not values:
+        return 50_000.0
+    minimum = min(0.0, min(values))
+    maximum = max(values)
+    span = max(maximum - minimum, 50_000.0)
+    rough_step = span / 8
+    step_units = max(1, int((rough_step + 49_999.9999) // 50_000.0))
+    return float(step_units * 50_000)
+
+
+def _chart_age(row) -> int:
+    return row.wife_age
 
 
 def _tax_detail_table(result: ProjectionResult) -> dict[str, Any]:
@@ -154,15 +247,18 @@ def _account_balances_table(result: ProjectionResult) -> dict[str, Any]:
 
 
 def _liquid_net_worth_chart(result: ProjectionResult) -> dict[str, Any]:
+    values = [row.liquid_resources_end for row in result.ledger]
     return {
         "title": "Total Liquid Net Worth",
         "kind": "line",
-        "x_axis": "year",
+        "x_axis": "age",
+        "y_axis_step": _chart_axis_step(values),
         "series": [
             {
                 "name": "liquid_resources_end",
                 "points": [
-                    {"year": row.year, "value": row.liquid_resources_end} for row in result.ledger
+                    {"age": _chart_age(row), "value": row.liquid_resources_end}
+                    for row in result.ledger
                 ],
             }
         ],
@@ -170,22 +266,26 @@ def _liquid_net_worth_chart(result: ProjectionResult) -> dict[str, Any]:
 
 
 def _income_vs_expenses_chart(result: ProjectionResult) -> dict[str, Any]:
+    values = [round(sum(row.income.values()), 2) for row in result.ledger] + [
+        round(sum(row.expenses.values()), 2) for row in result.ledger
+    ]
     return {
         "title": "Income vs Expenses",
         "kind": "line",
-        "x_axis": "year",
+        "x_axis": "age",
+        "y_axis_step": _chart_axis_step(values),
         "series": [
             {
                 "name": "income_total",
                 "points": [
-                    {"year": row.year, "value": round(sum(row.income.values()), 2)}
+                    {"age": _chart_age(row), "value": round(sum(row.income.values()), 2)}
                     for row in result.ledger
                 ],
             },
             {
                 "name": "expenses_total",
                 "points": [
-                    {"year": row.year, "value": round(sum(row.expenses.values()), 2)}
+                    {"age": _chart_age(row), "value": round(sum(row.expenses.values()), 2)}
                     for row in result.ledger
                 ],
             },
@@ -194,29 +294,39 @@ def _income_vs_expenses_chart(result: ProjectionResult) -> dict[str, Any]:
 
 
 def _taxes_chart(result: ProjectionResult) -> dict[str, Any]:
+    values = [
+        value
+        for row in result.ledger
+        for value in (
+            row.taxes.get("federal", 0.0),
+            row.taxes.get("state", 0.0),
+            row.taxes.get("total", 0.0),
+        )
+    ]
     return {
         "title": "Taxes Over Time",
         "kind": "line",
-        "x_axis": "year",
+        "x_axis": "age",
+        "y_axis_step": _chart_axis_step(values),
         "series": [
             {
                 "name": "federal_tax",
                 "points": [
-                    {"year": row.year, "value": row.taxes.get("federal", 0.0)}
+                    {"age": _chart_age(row), "value": row.taxes.get("federal", 0.0)}
                     for row in result.ledger
                 ],
             },
             {
                 "name": "state_tax",
                 "points": [
-                    {"year": row.year, "value": row.taxes.get("state", 0.0)}
+                    {"age": _chart_age(row), "value": row.taxes.get("state", 0.0)}
                     for row in result.ledger
                 ],
             },
             {
                 "name": "total_tax",
                 "points": [
-                    {"year": row.year, "value": row.taxes.get("total", 0.0)}
+                    {"age": _chart_age(row), "value": row.taxes.get("total", 0.0)}
                     for row in result.ledger
                 ],
             },
@@ -225,23 +335,60 @@ def _taxes_chart(result: ProjectionResult) -> dict[str, Any]:
 
 
 def _account_balances_chart(result: ProjectionResult) -> dict[str, Any]:
-    account_names = sorted(result.ledger[0].account_balances_end) if result.ledger else []
+    if not result.ledger:
+        return {
+            "title": "Account Balances",
+            "kind": "stacked_area",
+            "x_axis": "age",
+            "y_axis_step": 50_000.0,
+            "series": [],
+        }
+
+    grouped_series = {
+        "Husband Traditional": lambda balances: sum(
+            value
+            for name, value in balances.items()
+            if name.startswith("Husband ") and "Traditional" in name
+        ),
+        "Husband Roth": lambda balances: sum(
+            value
+            for name, value in balances.items()
+            if name.startswith("Husband ") and "Roth" in name
+        ),
+        "Wife Traditional": lambda balances: sum(
+            value
+            for name, value in balances.items()
+            if name.startswith("Wife ") and "Traditional" in name
+        ),
+        "Wife Roth": lambda balances: sum(
+            value for name, value in balances.items() if name.startswith("Wife ") and "Roth" in name
+        ),
+        "Taxable": lambda balances: sum(
+            value for name, value in balances.items() if "Taxable" in name
+        ),
+    }
+    values = [
+        round(series_builder(row.account_balances_end), 2)
+        for series_builder in grouped_series.values()
+        for row in result.ledger
+    ]
     return {
         "title": "Account Balances",
         "kind": "stacked_area",
-        "x_axis": "year",
+        "x_axis": "age",
+        "y_axis_step": _chart_axis_step(values),
         "series": [
             {
-                "name": account_name,
+                "name": series_name,
                 "points": [
                     {
-                        "year": row.year,
-                        "value": row.account_balances_end.get(account_name, 0.0),
+                        "age": _chart_age(row),
+                        "value": round(series_builder(row.account_balances_end), 2),
                     }
                     for row in result.ledger
                 ],
             }
-            for account_name in account_names
+            for series_name, series_builder in grouped_series.items()
         ],
     }
 

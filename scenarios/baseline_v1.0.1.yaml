@@ -43,7 +43,7 @@ household:
     retirement_age: 65
     modeled_death:
       enabled: true
-      death_year: 2038
+      death_year: 2056
 
   wife:
     label: "Wife"
@@ -419,11 +419,18 @@ strategy:
       enabled: true
       start_age: 70.5
       annual_limit: 100000.00
+      allow_above_rmd: true
       applies_to:
         - "traditional_ira"
       tax_treatment:
         reduces_rmd: true
         excluded_from_taxable_income: true
+      depletion_target:
+        enabled: true
+        owners: [ "Husband", "Wife" ]
+        target_age: 90
+        target_balance: 0.00
+        method: "level_annual_qcd"
 
     coordination_rules:
       apply_qcd_before_rmd_taxation: true

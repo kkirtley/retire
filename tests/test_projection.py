@@ -178,27 +178,27 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "conversion_tax_impact": 0.0,
         "conversion_tax_payment": 0.0,
         "conversion_tax_shortfall": 0.0,
-        "rmd_total": 3757.85,
-        "qcd_total": 3757.85,
+        "rmd_total": 0.0,
+        "qcd_total": 0.0,
         "taxable_rmd_total": 0.0,
-        "charitable_giving_total": 3757.85,
+        "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
     assert final_year.taxes == {"federal": 3693.94, "state": 1304.65, "total": 4998.59}
     assert final_year.mortgage["remaining_balance"] == 0.0
-    assert final_year.withdrawals == {"Household Operating Cash": 26381.49}
+    assert final_year.withdrawals == {"Household Operating Cash": 39816.25}
     assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8401241.54
+    assert final_year.liquid_resources_end == 8694229.24
     assert final_year.alerts == (
-        "Skipped 9832.96 of charitable giving because QCD-eligible IRA capacity was insufficient.",
+        "Skipped 13590.81 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8401241.54,
-        "total_taxes_paid": 528021.6,
+        "terminal_net_worth": 8694229.24,
+        "total_taxes_paid": 515800.53,
         "total_roth_converted": 623205.48,
-        "projected_rmds_by_year_total": 89958.81,
-        "total_qcd": 89958.81,
-        "total_given": 89958.81,
+        "projected_rmds_by_year_total": 80212.31,
+        "total_qcd": 304699.95,
+        "total_given": 304699.95,
         "traditional_balance_at_husband_age_70": 157500.0,
         "failure_year_if_any": None,
     }

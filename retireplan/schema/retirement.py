@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from enum import Enum
 from itertools import pairwise
+from math import ceil
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -864,12 +865,44 @@ class QCDTaxTreatment(StrictBaseModel):
     excluded_from_taxable_income: bool
 
 
+class QCDDepletionMethod(str, Enum):
+    LEVEL_ANNUAL_QCD = "level_annual_qcd"
+
+
+class QCDDepletionTarget(StrictBaseModel):
+    enabled: bool = False
+    owners: List[AccountOwner] = Field(
+        default_factory=lambda: [AccountOwner.HUSBAND, AccountOwner.WIFE]
+    )
+    target_age: int = Field(default=90, ge=71)
+    target_balance: float = Field(default=0.0, ge=0.0)
+    method: QCDDepletionMethod = QCDDepletionMethod.LEVEL_ANNUAL_QCD
+
+    @model_validator(mode="after")
+    def validate_owners(self) -> "QCDDepletionTarget":
+        if self.enabled and not self.owners:
+            raise ValueError("QCD depletion target requires at least one owner")
+        return self
+
+
 class QCDConfig(StrictBaseModel):
     enabled: bool
     start_age: float = Field(ge=70.5)
     annual_limit: float = Field(ge=0.0)
+    allow_above_rmd: bool = False
     applies_to: List[AccountType]
     tax_treatment: QCDTaxTreatment
+    depletion_target: QCDDepletionTarget = Field(default_factory=QCDDepletionTarget)
+
+    @model_validator(mode="after")
+    def validate_depletion_rules(self) -> "QCDConfig":
+        if self.depletion_target.enabled and not self.allow_above_rmd:
+            raise ValueError("QCD depletion target requires allow_above_rmd=true")
+        if self.depletion_target.enabled and self.depletion_target.target_age < ceil(
+            self.start_age
+        ):
+            raise ValueError("QCD depletion target age must be at or after the QCD start age")
+        return self
 
 
 class GivingCoordinationRules(StrictBaseModel):

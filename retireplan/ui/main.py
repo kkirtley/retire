@@ -62,6 +62,7 @@ class RetirePlanWindow(QMainWindow):
         self.summary_label = QLabel()
         self.results_table = QTableWidget()
         self.activity_table = QTableWidget()
+        self.qcd_depletion_table = QTableWidget()
         self.mortgage_table = QTableWidget()
         self.account_balance_filter = QComboBox()
         self.account_balance_transpose = QCheckBox("Transpose table")
@@ -114,6 +115,10 @@ class RetirePlanWindow(QMainWindow):
         activity_layout = QVBoxLayout(activity_widget)
         activity_layout.addWidget(self.activity_table)
 
+        qcd_depletion_widget = QWidget()
+        qcd_depletion_layout = QVBoxLayout(qcd_depletion_widget)
+        qcd_depletion_layout.addWidget(self.qcd_depletion_table)
+
         mortgage_widget = QWidget()
         mortgage_layout = QVBoxLayout(mortgage_widget)
         mortgage_layout.addWidget(self.mortgage_table)
@@ -141,6 +146,7 @@ class RetirePlanWindow(QMainWindow):
         self.tabs.addTab(inputs_widget, "Inputs")
         self.tabs.addTab(results_widget, "Results Table")
         self.tabs.addTab(activity_widget, "Retirement Activity")
+        self.tabs.addTab(qcd_depletion_widget, "QCD Depletion")
         self.tabs.addTab(mortgage_widget, "Mortgage")
         self.tabs.addTab(balances_widget, "Account Balances")
         self.tabs.addTab(details_widget, "Calculation Details")
@@ -196,6 +202,7 @@ class RetirePlanWindow(QMainWindow):
     def _wire_actions(self) -> None:
         self._configure_table(self.results_table)
         self._configure_table(self.activity_table)
+        self._configure_table(self.qcd_depletion_table)
         self._configure_table(self.mortgage_table)
         self._configure_table(self.account_balances_table)
         self._configure_table(self.roth_table)
@@ -241,7 +248,7 @@ class RetirePlanWindow(QMainWindow):
                 path_hint=self.scenario_path_input.text().strip() or None,
             )
             result = project_scenario(loaded.scenario, loaded.warnings)
-            reporting = build_reporting_bundle(result)
+            reporting = build_reporting_bundle(result, loaded.scenario)
             snapshot = build_ui_snapshot(loaded.scenario, result, reporting, loaded.warnings)
 
             comparison_snapshot = None
@@ -249,7 +256,7 @@ class RetirePlanWindow(QMainWindow):
             if compare_text:
                 compare_loaded = load_scenario(compare_text)
                 compare_result = project_scenario(compare_loaded.scenario, compare_loaded.warnings)
-                compare_reporting = build_reporting_bundle(compare_result)
+                compare_reporting = build_reporting_bundle(compare_result, compare_loaded.scenario)
                 comparison_snapshot = build_ui_snapshot(
                     compare_loaded.scenario,
                     compare_result,
@@ -276,6 +283,7 @@ class RetirePlanWindow(QMainWindow):
         )
         self._populate_table(self.results_table, snapshot.results_table)
         self._populate_table(self.activity_table, snapshot.activity_table)
+        self._populate_table(self.qcd_depletion_table, snapshot.qcd_depletion_table)
         self._populate_table(self.mortgage_table, snapshot.mortgage_table)
         self._account_balance_tables = {
             item.name: item.table for item in snapshot.account_balance_tables
@@ -326,20 +334,36 @@ class RetirePlanWindow(QMainWindow):
         qchart = QChart()
         qchart.setTitle(chart.title)
 
-        all_years = [point[0] for series in chart.series for point in series.points]
+        all_x_values = [point[0] for series in chart.series for point in series.points]
         all_values = [point[1] for series in chart.series for point in series.points]
+        y_scale = 1_000.0
 
         axis_x = QValueAxis()
         axis_x.setLabelFormat("%.0f")
-        axis_x.setTitleText("Year")
-        if all_years:
-            axis_x.setRange(float(min(all_years)), float(max(all_years)))
+        axis_x.setTitleText(chart.x_axis.title())
+        if all_x_values:
+            axis_min = float((min(all_x_values) // 5) * 5)
+            axis_max = float((((max(all_x_values) + 4) // 5) * 5))
+            if axis_max <= axis_min:
+                axis_max = axis_min + 5.0
+            axis_x.setRange(axis_min, axis_max)
+            axis_x.setTickAnchor(axis_min)
+            axis_x.setTickInterval(5.0)
 
         axis_y = QValueAxis()
-        axis_y.setLabelFormat("%.0f")
-        axis_y.setTitleText("Value")
+        axis_y.setLabelFormat("$%.0fK")
+        axis_y.setTitleText("Amount ($K)")
         if all_values:
-            axis_y.setRange(float(min(0.0, min(all_values))), float(max(all_values) * 1.05 or 1.0))
+            minimum = float(min(0.0, min(all_values)))
+            maximum = float(max(all_values))
+            step = max(float(chart.y_axis_step), 50_000.0)
+            axis_min = step * (minimum // step)
+            axis_max = step * max(1.0, -(-maximum // step))
+            if axis_max <= axis_min:
+                axis_max = axis_min + step
+            axis_y.setRange(axis_min / y_scale, axis_max / y_scale)
+            axis_y.setTickAnchor(0.0)
+            axis_y.setTickInterval(step / y_scale)
 
         qchart.addAxis(axis_x, Qt.AlignBottom)
         qchart.addAxis(axis_y, Qt.AlignLeft)
@@ -347,8 +371,8 @@ class RetirePlanWindow(QMainWindow):
         for series_model in chart.series:
             series = QLineSeries()
             series.setName(series_model.name)
-            for year, value in series_model.points:
-                series.append(float(year), float(value))
+            for x_value, value in series_model.points:
+                series.append(float(x_value), float(value) / y_scale)
             qchart.addSeries(series)
             series.attachAxis(axis_x)
             series.attachAxis(axis_y)
@@ -375,8 +399,10 @@ class RetirePlanWindow(QMainWindow):
         return "Warnings:\n" + "\n".join(f"- {warning}" for warning in warnings)
 
     def _format_cell(self, value: object) -> str:
+        if isinstance(value, int):
+            return f"{value:,d}"
         if isinstance(value, float):
-            return f"{value:,.2f}"
+            return f"{value:,.0f}"
         return str(value)
 
     def _configure_table(self, table: QTableWidget) -> None:

@@ -39,6 +39,7 @@ class ProjectionRow:
     surplus_allocations: dict[str, float]
     rollovers: dict[str, float]
     withdrawals: dict[str, float]
+    qcd_distributions: dict[str, float]
     alerts: tuple[str, ...]
     net_cash_flow: float
     account_balances_end: dict[str, float]
@@ -214,6 +215,7 @@ def project_scenario(
                 surplus_allocations=_rounded_values(surplus_allocations),
                 rollovers=_rounded_values(rollovers),
                 withdrawals=_rounded_values(withdrawals),
+                qcd_distributions=_rounded_values(strategy_execution.qcd_distributions),
                 alerts=rollover_alerts + medicare_summary.alerts + strategy_execution.alerts,
                 net_cash_flow=round(net_cash_flow, 2),
                 account_balances_end=_rounded_values(balances),

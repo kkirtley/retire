@@ -9,6 +9,7 @@ import typer
 
 from retireplan.core import project_scenario
 from retireplan.io import load_scenario
+from retireplan.output_formatting import round_output_value
 from retireplan.reporting import build_reporting_bundle, write_reporting_bundle
 
 app = typer.Typer(help="Retirement planning tool for veteran households.")
@@ -42,7 +43,7 @@ def run(
     """Run a retirement projection."""
     loaded = load_scenario(scenario_path)
     result = project_scenario(loaded.scenario, loaded.warnings)
-    reporting = build_reporting_bundle(result)
+    reporting = build_reporting_bundle(result, loaded.scenario)
 
     out = out.expanduser()
     charts = charts.expanduser()
@@ -63,7 +64,7 @@ def run(
         "report_exports": report_exports,
         "ledger": [row.__dict__ for row in result.ledger],
     }
-    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(round_output_value(payload), indent=2), encoding="utf-8")
 
     typer.echo(f"Projection complete: {result.scenario_name} v{result.version}")
     typer.echo(f"Success: {result.success}")

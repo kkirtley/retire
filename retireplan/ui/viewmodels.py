@@ -8,6 +8,7 @@ from typing import Any
 
 from retireplan.core import ProjectionResult
 from retireplan.mortgage import build_mortgage_schedule
+from retireplan.output_formatting import round_output_value
 from retireplan.scenario import RetirementScenario
 
 
@@ -27,6 +28,8 @@ class UiChartSeries:
 class UiChartModel:
     title: str
     kind: str
+    x_axis: str
+    y_axis_step: float
     series: tuple[UiChartSeries, ...]
 
 
@@ -38,6 +41,7 @@ class UiProjectionSnapshot:
     summary_rows: tuple[tuple[str, str], ...]
     results_table: UiTableModel
     activity_table: UiTableModel
+    qcd_depletion_table: UiTableModel
     mortgage_table: UiTableModel
     account_balances_table: UiTableModel
     account_balance_tables: tuple[UiNamedTable, ...]
@@ -69,7 +73,9 @@ def transpose_table(table: UiTableModel) -> UiTableModel:
 
 
 def _detail_json_by_year(result: ProjectionResult) -> dict[int, str]:
-    return {row.year: json.dumps(asdict(row), indent=2) for row in result.ledger}
+    return {
+        row.year: json.dumps(round_output_value(asdict(row)), indent=2) for row in result.ledger
+    }
 
 
 def _detail_summary_json(
@@ -86,7 +92,7 @@ def _detail_summary_json(
         "summary": result.summary,
         "reporting_summary": reporting["summary"],
     }
-    return json.dumps(payload, indent=2)
+    return json.dumps(round_output_value(payload), indent=2)
 
 
 def build_ui_snapshot(
@@ -123,6 +129,9 @@ def build_ui_snapshot(
             excluded_columns=("husband_age", "wife_age"),
         ),
         activity_table=_activity_table(result),
+        qcd_depletion_table=_table_from_reporting(
+            reporting["tables"].get("qcd_depletion", {"columns": (), "rows": ()})
+        ),
         mortgage_table=_mortgage_table(result, scenario),
         account_balances_table=account_balance_tables[0].table,
         account_balance_tables=account_balance_tables,
@@ -132,7 +141,7 @@ def build_ui_snapshot(
         detail_years=tuple(row.year for row in result.ledger),
         detail_json_by_year=_detail_json_by_year(result),
         detail_summary_json=_detail_summary_json(result, reporting, warnings),
-        raw_summary=result.summary,
+        raw_summary=round_output_value(result.summary),
     )
 
 
@@ -157,11 +166,13 @@ def build_comparison_table(
         if isinstance(primary_value, (int, float)) and isinstance(comparison_value, (int, float)):
             delta = round(primary_value - comparison_value, 2)
         rows.append(
-            (
-                label,
-                _format_value(primary_value),
-                _format_value(comparison_value),
-                _format_value(delta),
+            round_output_value(
+                (
+                    label,
+                    _format_value(primary_value),
+                    _format_value(comparison_value),
+                    _format_value(delta),
+                )
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
@@ -198,16 +209,18 @@ def _roth_planner_table(result: ProjectionResult) -> UiTableModel:
             if "IRMAA" in alert or "conversion" in alert or "traditional balance target" in alert
         )
         rows.append(
-            (
-                row.year,
-                _ages_label(row.husband_age, row.wife_age),
-                row.strategy.get("roth_conversion_total", 0.0),
-                row.strategy.get("conversion_tax_impact", 0.0),
-                row.strategy.get("conversion_tax_payment", 0.0),
-                row.strategy.get("conversion_tax_shortfall", 0.0),
-                row.medicare.get("irmaa_tier", 0.0),
-                row.medicare.get("total", 0.0),
-                planner_notes,
+            round_output_value(
+                (
+                    row.year,
+                    _ages_label(row.husband_age, row.wife_age),
+                    row.strategy.get("roth_conversion_total", 0.0),
+                    row.strategy.get("conversion_tax_impact", 0.0),
+                    row.strategy.get("conversion_tax_payment", 0.0),
+                    row.strategy.get("conversion_tax_shortfall", 0.0),
+                    row.medicare.get("irmaa_tier", 0.0),
+                    row.medicare.get("total", 0.0),
+                    planner_notes,
+                )
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
@@ -219,6 +232,8 @@ def _activity_table(result: ProjectionResult) -> UiTableModel:
         "husband/wife ages",
         "rollover_total",
         "rollovers",
+        "qcd_distribution_total",
+        "qcd_distributions",
         "roth_conversion_total",
         "conversion_tax_impact",
         "conversion_tax_payment",
@@ -233,16 +248,23 @@ def _activity_table(result: ProjectionResult) -> UiTableModel:
         rollovers = "; ".join(
             f"{name}: {_format_value(amount)}" for name, amount in row.rollovers.items()
         )
+        qcd_distributions = "; ".join(
+            f"{name}: {_format_value(amount)}" for name, amount in row.qcd_distributions.items()
+        )
         rows.append(
-            (
-                row.year,
-                _ages_label(row.husband_age, row.wife_age),
-                rollover_total,
-                rollovers,
-                conversion_total,
-                row.strategy.get("conversion_tax_impact", 0.0),
-                row.strategy.get("conversion_tax_payment", 0.0),
-                "; ".join(row.alerts),
+            round_output_value(
+                (
+                    row.year,
+                    _ages_label(row.husband_age, row.wife_age),
+                    rollover_total,
+                    rollovers,
+                    round(sum(row.qcd_distributions.values()), 2),
+                    qcd_distributions,
+                    conversion_total,
+                    row.strategy.get("conversion_tax_impact", 0.0),
+                    row.strategy.get("conversion_tax_payment", 0.0),
+                    "; ".join(row.alerts),
+                )
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
@@ -279,25 +301,27 @@ def _mortgage_table(result: ProjectionResult, scenario: RetirementScenario) -> U
         ):
             continue
         rows.append(
-            (
-                row.year,
-                _ages_label(row.husband_age, row.wife_age),
-                monthly_payment,
-                payoff_date,
-                row.expenses.get("property_tax", 0.0),
-                row.expenses.get("homeowners_insurance", 0.0),
-                round(
-                    row.expenses.get("mortgage_payment", 0.0)
-                    + row.expenses.get("property_tax", 0.0)
-                    + row.expenses.get("homeowners_insurance", 0.0),
-                    2,
-                ),
-                row.mortgage.get("scheduled_payment", 0.0),
-                row.mortgage.get("extra_principal", 0.0),
-                row.mortgage.get("total_payment", 0.0),
-                row.mortgage.get("interest", 0.0),
-                row.mortgage.get("principal", 0.0),
-                row.mortgage.get("remaining_balance", 0.0),
+            round_output_value(
+                (
+                    row.year,
+                    _ages_label(row.husband_age, row.wife_age),
+                    monthly_payment,
+                    payoff_date,
+                    row.expenses.get("property_tax", 0.0),
+                    row.expenses.get("homeowners_insurance", 0.0),
+                    round(
+                        row.expenses.get("mortgage_payment", 0.0)
+                        + row.expenses.get("property_tax", 0.0)
+                        + row.expenses.get("homeowners_insurance", 0.0),
+                        2,
+                    ),
+                    row.mortgage.get("scheduled_payment", 0.0),
+                    row.mortgage.get("extra_principal", 0.0),
+                    row.mortgage.get("total_payment", 0.0),
+                    row.mortgage.get("interest", 0.0),
+                    row.mortgage.get("principal", 0.0),
+                    row.mortgage.get("remaining_balance", 0.0),
+                )
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
@@ -356,11 +380,13 @@ def _account_balances_table(
         if surplus_column:
             surplus_values = (row.surplus_allocations.get(surplus_destination, 0.0),)
         rows.append(
-            (row.year, _ages_label(row.husband_age, row.wife_age))
-            + surplus_values
-            + tuple(
-                row.account_balances_end.get(account_name, 0.0)
-                for account_name in selected_account_names
+            round_output_value(
+                (row.year, _ages_label(row.husband_age, row.wife_age))
+                + surplus_values
+                + tuple(
+                    row.account_balances_end.get(account_name, 0.0)
+                    for account_name in selected_account_names
+                )
             )
         )
     return UiTableModel(columns=columns, rows=tuple(rows))
@@ -374,7 +400,9 @@ def _irmaa_table(result: ProjectionResult) -> UiTableModel:
         irmaa_tier = row.medicare.get("irmaa_tier", 0.0)
         if irmaa_tier <= 0 and not irmaa_alerts:
             continue
-        rows.append((row.year, row.husband_age, row.wife_age, irmaa_tier, irmaa_alerts))
+        rows.append(
+            round_output_value((row.year, row.husband_age, row.wife_age, irmaa_tier, irmaa_alerts))
+        )
     return UiTableModel(columns=columns, rows=tuple(rows))
 
 
@@ -385,11 +413,13 @@ def _charts_from_reporting(charts: dict[str, Any]) -> tuple[UiChartModel, ...]:
             UiChartModel(
                 title=chart["title"],
                 kind=chart["kind"],
+                x_axis=chart.get("x_axis", "year"),
+                y_axis_step=float(chart.get("y_axis_step", 50_000.0)),
                 series=tuple(
                     UiChartSeries(
                         name=series["name"],
                         points=tuple(
-                            (int(point["year"]), float(point["value"]))
+                            (int(point[chart.get("x_axis", "year")]), float(point["value"]))
                             for point in series["points"]
                         ),
                     )
@@ -405,8 +435,10 @@ def _format_value(value: object) -> str:
         return "n/a"
     if isinstance(value, bool):
         return "Yes" if value else "No"
+    if isinstance(value, int):
+        return f"{value:,d}"
     if isinstance(value, float):
-        return f"{value:,.2f}"
+        return f"{value:,.0f}"
     return str(value)
 
 

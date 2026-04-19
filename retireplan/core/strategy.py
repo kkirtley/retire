@@ -15,6 +15,7 @@ from retireplan.tax import TaxSummary, calculate_tax_summary
 @dataclass(frozen=True)
 class StrategyExecution:
     cash_withdrawals: dict[str, float]
+    qcd_distributions: dict[str, float]
     roth_conversion_total: float
     conversion_tax_payment: float
     conversion_tax_shortfall: float
@@ -40,6 +41,18 @@ class StrategyExecution:
         }
 
 
+@dataclass(frozen=True)
+class QCDDepletionOwnerProgress:
+    owner: str
+    target_age: int
+    current_balance: float
+    annual_qcd_required: float
+    actual_qcd: float
+    projected_balance_at_target_age: float
+    on_pace: bool
+    constrained: bool
+
+
 def execute_strategy(
     scenario: RetirementScenario,
     period: TimelinePeriod,
@@ -49,12 +62,20 @@ def execute_strategy(
 ) -> StrategyExecution:
     alerts: list[str] = []
     cash_withdrawals: dict[str, float] = {}
+    qcd_distributions: dict[str, float] = {}
 
     rmd_targets = _rmd_targets(scenario, period, balances)
     total_rmd = round(sum(rmd_targets.values()), 2)
 
     giving_target = _charitable_giving_target(scenario, income, total_rmd)
-    qcd_total = _apply_qcd(scenario, period, balances, rmd_targets, giving_target)
+    qcd_total, qcd_distributions, qcd_alerts = _apply_qcd(
+        scenario,
+        period,
+        balances,
+        rmd_targets,
+        giving_target,
+    )
+    alerts.extend(qcd_alerts)
     remaining_giving = round(max(giving_target - qcd_total, 0.0), 2)
 
     taxable_rmd_total = 0.0
@@ -112,6 +133,7 @@ def execute_strategy(
 
     return StrategyExecution(
         cash_withdrawals=_rounded_values(cash_withdrawals),
+        qcd_distributions=_rounded_values(qcd_distributions),
         roth_conversion_total=round(roth_conversion_total, 2),
         conversion_tax_payment=round(conversion_tax_payment, 2),
         conversion_tax_shortfall=round(conversion_tax_shortfall, 2),
@@ -204,46 +226,372 @@ def _apply_qcd(
     balances: dict[str, float],
     rmd_targets: dict[str, float],
     giving_target: float,
-) -> float:
+) -> tuple[float, dict[str, float], tuple[str, ...]]:
     qcd = scenario.strategy.charitable_giving.qcd
     if not scenario.strategy.charitable_giving.enabled or not qcd.enabled:
-        return 0.0
+        return 0.0, {}, ()
 
     qcd_age = ceil(float(qcd.start_age))
-    remaining_giving = min(giving_target, float(qcd.annual_limit))
+    depletion_enabled = qcd.depletion_target.enabled
+    depletion_targets = _qcd_depletion_targets(scenario, period, balances, qcd_age)
+    owner_floor_targets = _owner_qcd_floor_targets(qcd, depletion_targets, balances, scenario)
+    depletion_goal_total = round(sum(owner_floor_targets.values()), 2)
+    remaining_limit = round(max(float(qcd.annual_limit) - depletion_goal_total, 0.0), 2)
+    remaining_extra_target = 0.0
+    if not depletion_enabled:
+        remaining_extra_target = min(
+            max(giving_target - depletion_goal_total, 0.0), remaining_limit
+        )
     total_qcd = 0.0
+    qcd_distributions: dict[str, float] = {}
+    alerts: list[str] = []
     for owner, age, alive in (
         (AccountOwner.HUSBAND, period.husband_age, period.husband_alive),
         (AccountOwner.WIFE, period.wife_age, period.wife_alive),
     ):
-        if not alive or age < qcd_age or remaining_giving <= 0:
+        if not alive or age < qcd_age:
             continue
-        owner_rmd = rmd_targets.get(owner.value, 0.0)
-        if owner_rmd <= 0:
-            continue
-
-        owner_qcd = min(owner_rmd, remaining_giving)
-        qcd_withdrawals = _withdraw_from_accounts(
-            [
-                account
-                for account in _traditional_accounts_for_owner(scenario, owner)
-                if account.type in set(qcd.applies_to)
-            ],
-            balances,
-            owner_qcd,
+        applicable_accounts = _qcd_applicable_accounts(scenario, owner)
+        owner_available = round(
+            sum(balances.get(account.name, 0.0) for account in applicable_accounts),
+            2,
         )
-        owner_qcd_total = round(sum(qcd_withdrawals.values()), 2)
+        owner_qcd, remaining_extra_target, remaining_limit = _owner_qcd_target(
+            qcd,
+            owner.value,
+            owner_available,
+            rmd_targets.get(owner.value, 0.0),
+            owner_floor_targets,
+            remaining_extra_target,
+            remaining_limit,
+        )
+        if owner_qcd <= 0:
+            continue
+        owner_qcd_total = _apply_owner_qcd(
+            scenario,
+            owner,
+            balances,
+            applicable_accounts,
+            owner_qcd,
+            rmd_targets,
+            qcd,
+            qcd_distributions,
+        )
         if owner_qcd_total <= 0:
             continue
-
-        if (
-            qcd.tax_treatment.reduces_rmd
-            and scenario.strategy.withdrawals.rmd_handling.allow_qcd_to_satisfy_rmd
-        ):
-            rmd_targets[owner.value] = round(max(owner_rmd - owner_qcd_total, 0.0), 2)
         total_qcd += owner_qcd_total
-        remaining_giving = round(max(remaining_giving - owner_qcd_total, 0.0), 2)
-    return round(total_qcd, 2)
+    if depletion_goal_total > total_qcd:
+        alerts.append(
+            f"QCD depletion target fell short by {depletion_goal_total - total_qcd:.2f} this year because annual-limit or IRA-balance constraints prevented staying on the age-{qcd.depletion_target.target_age} giving glidepath."
+        )
+    return round(total_qcd, 2), _rounded_values(qcd_distributions), tuple(alerts)
+
+
+def _qcd_applicable_accounts(scenario: RetirementScenario, owner: AccountOwner) -> list[Account]:
+    qcd_types = set(scenario.strategy.charitable_giving.qcd.applies_to)
+    return [
+        account
+        for account in _traditional_accounts_for_owner(scenario, owner)
+        if account.type in qcd_types
+    ]
+
+
+def _owner_qcd_target(
+    qcd,
+    owner_key: str,
+    owner_available: float,
+    owner_rmd: float,
+    owner_floor_targets: dict[str, float],
+    remaining_extra_target: float,
+    remaining_limit: float,
+) -> tuple[float, float, float]:
+    if owner_available <= 0:
+        return 0.0, remaining_extra_target, remaining_limit
+
+    owner_floor = min(owner_floor_targets.get(owner_key, 0.0), owner_available)
+    owner_cap = owner_available if qcd.allow_above_rmd else owner_rmd
+    if owner_cap <= 0 and owner_floor <= 0:
+        return 0.0, remaining_extra_target, remaining_limit
+
+    owner_qcd = owner_floor
+    additional_capacity = round(max(min(owner_cap, owner_available) - owner_floor, 0.0), 2)
+    if additional_capacity <= 0 or remaining_extra_target <= 0 or remaining_limit <= 0:
+        return owner_qcd, remaining_extra_target, remaining_limit
+
+    additional_qcd = min(additional_capacity, remaining_extra_target, remaining_limit)
+    owner_qcd = round(owner_qcd + additional_qcd, 2)
+    remaining_extra_target = round(max(remaining_extra_target - additional_qcd, 0.0), 2)
+    remaining_limit = round(max(remaining_limit - additional_qcd, 0.0), 2)
+    return owner_qcd, remaining_extra_target, remaining_limit
+
+
+def _owner_qcd_floor_targets(
+    qcd,
+    depletion_targets: dict[str, float],
+    balances: dict[str, float],
+    scenario: RetirementScenario,
+) -> dict[str, float]:
+    if not depletion_targets:
+        return {}
+
+    capped_targets = {
+        owner_key: min(
+            target_amount,
+            sum(
+                balances.get(account.name, 0.0)
+                for account in _qcd_applicable_accounts(scenario, AccountOwner(owner_key))
+            ),
+        )
+        for owner_key, target_amount in depletion_targets.items()
+    }
+    total_target = round(sum(capped_targets.values()), 2)
+    annual_limit = float(qcd.annual_limit)
+    if total_target <= annual_limit or total_target <= 0:
+        return {key: round(value, 2) for key, value in capped_targets.items()}
+
+    scale = annual_limit / total_target
+    return {key: round(value * scale, 2) for key, value in capped_targets.items()}
+
+
+def _apply_owner_qcd(
+    scenario: RetirementScenario,
+    owner: AccountOwner,
+    balances: dict[str, float],
+    applicable_accounts: list[Account],
+    owner_qcd: float,
+    rmd_targets: dict[str, float],
+    qcd,
+    qcd_distributions: dict[str, float],
+) -> float:
+    owner_rmd = rmd_targets.get(owner.value, 0.0)
+    qcd_withdrawals = _withdraw_from_accounts(
+        applicable_accounts,
+        balances,
+        owner_qcd,
+    )
+    owner_qcd_total = round(sum(qcd_withdrawals.values()), 2)
+    if owner_qcd_total <= 0:
+        return 0.0
+
+    _merge_amounts(qcd_distributions, qcd_withdrawals)
+    if (
+        qcd.tax_treatment.reduces_rmd
+        and scenario.strategy.withdrawals.rmd_handling.allow_qcd_to_satisfy_rmd
+    ):
+        rmd_targets[owner.value] = round(max(owner_rmd - owner_qcd_total, 0.0), 2)
+    return owner_qcd_total
+
+
+def _qcd_depletion_targets(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+    balances: dict[str, float],
+    qcd_age: int,
+) -> dict[str, float]:
+    config = scenario.strategy.charitable_giving.qcd.depletion_target
+    if not config.enabled:
+        return {}
+
+    targets: dict[str, float] = {}
+    for owner, age, alive in (
+        (AccountOwner.HUSBAND, period.husband_age, period.husband_alive),
+        (AccountOwner.WIFE, period.wife_age, period.wife_alive),
+    ):
+        if owner not in config.owners or not alive or age < qcd_age:
+            continue
+        applicable_accounts = [
+            account
+            for account in _traditional_accounts_for_owner(scenario, owner)
+            if account.type in set(scenario.strategy.charitable_giving.qcd.applies_to)
+        ]
+        owner_balance = round(
+            sum(balances.get(account.name, 0.0) for account in applicable_accounts), 2
+        )
+        if owner_balance <= config.target_balance:
+            continue
+
+        owner_target_age = _qcd_owner_target_age(scenario, owner, int(config.target_age))
+        periods_remaining = max(owner_target_age - age + 1, 1)
+        expected_return = _weighted_expected_return(
+            scenario,
+            period.year,
+            balances,
+            applicable_accounts,
+        )
+        target_amount = _level_annual_beginning_withdrawal(
+            owner_balance,
+            float(config.target_balance),
+            expected_return,
+            periods_remaining,
+        )
+        targets[owner.value] = round(min(owner_balance, target_amount), 2)
+    return targets
+
+
+def _qcd_owner_target_age(
+    scenario: RetirementScenario,
+    owner: AccountOwner,
+    configured_target_age: int,
+) -> int:
+    if owner == AccountOwner.HUSBAND:
+        person = scenario.household.husband
+    elif owner == AccountOwner.WIFE:
+        person = scenario.household.wife
+    else:
+        return configured_target_age
+
+    modeled_death = person.modeled_death
+    if not modeled_death.enabled or modeled_death.death_year is None:
+        return configured_target_age
+
+    death_age = modeled_death.death_year - person.birth_year
+    return min(configured_target_age, death_age)
+
+
+def _weighted_expected_return(
+    scenario: RetirementScenario,
+    year: int,
+    balances: dict[str, float],
+    accounts: list[Account],
+) -> float:
+    total_balance = sum(balances.get(account.name, 0.0) for account in accounts)
+    if total_balance <= 0:
+        return float(scenario.assumptions.investment_return_default)
+
+    weighted_return = 0.0
+    for account in accounts:
+        balance = balances.get(account.name, 0.0)
+        if balance <= 0:
+            continue
+        weighted_return += (balance / total_balance) * annual_return_for_year(
+            account, year, scenario
+        )
+    return weighted_return
+
+
+def _level_annual_beginning_withdrawal(
+    present_value: float,
+    target_value: float,
+    annual_return: float,
+    periods: int,
+) -> float:
+    if periods <= 0:
+        return max(present_value - target_value, 0.0)
+    if annual_return == 0:
+        return max((present_value - target_value) / periods, 0.0)
+
+    growth_factor = (1.0 + annual_return) ** periods
+    annuity_due_factor = (1.0 + annual_return) * ((growth_factor - 1.0) / annual_return)
+    if annuity_due_factor <= 0:
+        return max(present_value - target_value, 0.0)
+    return max((present_value * growth_factor - target_value) / annuity_due_factor, 0.0)
+
+
+def project_qcd_depletion_progress(
+    scenario: RetirementScenario,
+    *,
+    year: int,
+    husband_age: int,
+    wife_age: int,
+    husband_alive: bool,
+    wife_alive: bool,
+    account_balances_end: dict[str, float],
+    qcd_distributions: dict[str, float],
+    alerts: tuple[str, ...],
+) -> tuple[QCDDepletionOwnerProgress, ...]:
+    qcd = scenario.strategy.charitable_giving.qcd
+    if not qcd.enabled or not qcd.depletion_target.enabled:
+        return ()
+
+    constrained = any("QCD depletion target fell short" in alert for alert in alerts)
+    owner_rows: list[QCDDepletionOwnerProgress] = []
+    for owner, age, alive in (
+        (AccountOwner.HUSBAND, husband_age, husband_alive),
+        (AccountOwner.WIFE, wife_age, wife_alive),
+    ):
+        if owner not in qcd.depletion_target.owners:
+            continue
+
+        applicable_accounts = _qcd_applicable_accounts(scenario, owner)
+        current_balance = round(
+            sum(account_balances_end.get(account.name, 0.0) for account in applicable_accounts),
+            2,
+        )
+        actual_qcd = round(
+            sum(qcd_distributions.get(account.name, 0.0) for account in applicable_accounts),
+            2,
+        )
+        owner_target_age = _qcd_owner_target_age(
+            scenario,
+            owner,
+            int(qcd.depletion_target.target_age),
+        )
+        if not alive:
+            owner_rows.append(
+                QCDDepletionOwnerProgress(
+                    owner=owner.value,
+                    target_age=owner_target_age,
+                    current_balance=current_balance,
+                    annual_qcd_required=0.0,
+                    actual_qcd=actual_qcd,
+                    projected_balance_at_target_age=0.0,
+                    on_pace=True,
+                    constrained=constrained,
+                )
+            )
+            continue
+
+        periods_remaining = max(owner_target_age - age, 0)
+        annual_qcd_required = 0.0
+        projected_balance = current_balance
+        if periods_remaining > 0 and current_balance > qcd.depletion_target.target_balance:
+            expected_return = _weighted_expected_return(
+                scenario,
+                year,
+                account_balances_end,
+                applicable_accounts,
+            )
+            annual_qcd_required = _level_annual_beginning_withdrawal(
+                current_balance,
+                float(qcd.depletion_target.target_balance),
+                expected_return,
+                periods_remaining,
+            )
+            projected_balance = _project_balance_after_beginning_withdrawals(
+                current_balance,
+                actual_qcd,
+                expected_return,
+                periods_remaining,
+            )
+
+        projected_balance = round(max(projected_balance, 0.0), 2)
+        owner_rows.append(
+            QCDDepletionOwnerProgress(
+                owner=owner.value,
+                target_age=owner_target_age,
+                current_balance=round(current_balance, 2),
+                annual_qcd_required=round(annual_qcd_required, 2),
+                actual_qcd=actual_qcd,
+                projected_balance_at_target_age=projected_balance,
+                on_pace=projected_balance <= float(qcd.depletion_target.target_balance) + 1.0,
+                constrained=constrained,
+            )
+        )
+
+    return tuple(owner_rows)
+
+
+def _project_balance_after_beginning_withdrawals(
+    present_value: float,
+    annual_withdrawal: float,
+    annual_return: float,
+    periods: int,
+) -> float:
+    balance = present_value
+    for _ in range(periods):
+        balance = max(balance - annual_withdrawal, 0.0)
+        balance *= 1.0 + annual_return
+    return balance
 
 
 def _execute_roth_conversions(
