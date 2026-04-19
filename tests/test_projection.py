@@ -161,7 +161,7 @@ def test_projection_matches_stage_7_baseline_checkpoints():
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
         "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
     }
-    assert retirement_year.liquid_resources_end == 2472832.82
+    assert retirement_year.liquid_resources_end == 2472832.83
 
     assert final_year.year == 2067
     assert final_year.medicare == {
@@ -188,18 +188,18 @@ def test_projection_matches_stage_7_baseline_checkpoints():
     assert final_year.mortgage["remaining_balance"] == 0.0
     assert final_year.withdrawals == {"Household Operating Cash": 39816.25}
     assert final_year.net_cash_flow == -0.0
-    assert final_year.liquid_resources_end == 8694229.24
+    assert final_year.liquid_resources_end == 8763009.87
     assert final_year.alerts == (
         "Skipped 13590.81 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 8694229.24,
-        "total_taxes_paid": 515800.53,
-        "total_roth_converted": 623205.48,
-        "projected_rmds_by_year_total": 80212.31,
-        "total_qcd": 304699.95,
-        "total_given": 304699.95,
-        "traditional_balance_at_husband_age_70": 157500.0,
+        "terminal_net_worth": 8763009.87,
+        "total_taxes_paid": 520167.1,
+        "total_roth_converted": 640000.0,
+        "projected_rmds_by_year_total": 71209.97,
+        "total_qcd": 275572.89,
+        "total_given": 275572.89,
+        "traditional_balance_at_husband_age_70": 184047.69,
         "failure_year_if_any": None,
     }
     assert result.failure_year is None

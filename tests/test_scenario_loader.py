@@ -18,6 +18,7 @@ def test_load_baseline_scenario_and_collect_warnings():
     assert loaded.scenario.strategy.account_rollovers.enabled is True
     assert loaded.scenario.strategy.charitable_giving.qcd.allow_above_rmd is True
     assert loaded.scenario.strategy.charitable_giving.qcd.depletion_target.enabled is True
+    assert loaded.scenario.strategy.charitable_giving.qcd.depletion_target.owners == ["Husband"]
     assert loaded.scenario.strategy.charitable_giving.qcd.depletion_target.target_age == 90
 
 

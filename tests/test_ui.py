@@ -58,7 +58,7 @@ def test_ui_snapshot_exposes_stage_9_views():
     assert snapshot.qcd_depletion_table.columns[1] == "husband/wife ages"
     qcd_row = next(row for row in snapshot.qcd_depletion_table.rows if row[0] == 2042)
     assert qcd_row[3] == 89
-    assert qcd_row[8] == 90
+    assert qcd_row[8] is None
     assert snapshot.mortgage_table.columns[0] == "year"
     assert snapshot.mortgage_table.columns[1] == "husband/wife ages"
     assert snapshot.mortgage_table.columns[2] == "monthly_payment"

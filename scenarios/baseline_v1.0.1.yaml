@@ -427,7 +427,7 @@ strategy:
         excluded_from_taxable_income: true
       depletion_target:
         enabled: true
-        owners: [ "Husband", "Wife" ]
+        owners: [ "Husband" ]
         target_age: 90
         target_balance: 0.00
         method: "level_annual_qcd"

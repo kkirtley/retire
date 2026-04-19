@@ -50,7 +50,7 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts():
         row for row in bundle["tables"]["qcd_depletion"]["rows"] if row["year"] == 2042
     )
     assert qcd_depletion_row["husband_target_age"] == 89
-    assert qcd_depletion_row["wife_target_age"] == 90
+    assert qcd_depletion_row["wife_target_age"] is None
     assert qcd_depletion_row["on_pace"] is True
     assert [series["name"] for series in account_balance_chart["series"]] == [
         "Husband Traditional",

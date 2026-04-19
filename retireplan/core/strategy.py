@@ -640,16 +640,10 @@ def _execute_roth_conversions(
     if constrained <= 0:
         return 0.0
 
-    conversion_withdrawals = _withdraw_from_accounts(
-        _traditional_accounts_for_owner(scenario, AccountOwner.HUSBAND),
-        balances,
-        constrained,
-    )
-    moved_total = round(sum(conversion_withdrawals.values()), 2)
+    moved_total = _execute_household_roth_conversion(scenario, balances, constrained)
     if moved_total <= 0:
         return 0.0
 
-    _deposit_to_roth_accounts(scenario, AccountOwner.HUSBAND, balances, moved_total)
     return moved_total
 
 
@@ -1220,6 +1214,36 @@ def _withdraw_from_accounts(
         if remaining <= 0:
             break
     return withdrawals
+
+
+def _execute_household_roth_conversion(
+    scenario: RetirementScenario,
+    balances: dict[str, float],
+    required_amount: float,
+) -> float:
+    remaining = required_amount
+    converted_by_owner: dict[AccountOwner, float] = {}
+    for owner in (AccountOwner.WIFE, AccountOwner.HUSBAND):
+        if remaining <= 0:
+            break
+        owner_withdrawals = _withdraw_from_accounts(
+            _traditional_accounts_for_owner(scenario, owner),
+            balances,
+            remaining,
+        )
+        owner_total = round(sum(owner_withdrawals.values()), 2)
+        if owner_total <= 0:
+            continue
+        converted_by_owner[owner] = owner_total
+        remaining = round(remaining - owner_total, 10)
+
+    moved_total = round(sum(converted_by_owner.values()), 2)
+    if moved_total <= 0:
+        return 0.0
+
+    for owner, amount in converted_by_owner.items():
+        _deposit_to_roth_accounts(scenario, owner, balances, amount)
+    return moved_total
 
 
 def _deposit_to_roth_accounts(
