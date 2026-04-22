@@ -134,3 +134,19 @@ def test_run_command_strict_override_fails_on_soft_warnings(tmp_path, golden_pay
     assert result.exception is not None
     assert "Strict validation failed" in str(result.exception)
     assert not output_path.exists()
+
+
+def test_validate_command_strict_override_fails_on_modeled_death_warning(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["validation"]["strict"] = False
+    payload["household"]["husband"]["modeled_death"] = {"enabled": True, "death_year": None}
+
+    scenario_path = tmp_path / "death-warning.yaml"
+    scenario_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    result = runner.invoke(app, ["validate", str(scenario_path), "--strict-validation"])
+
+    assert result.exit_code != 0
+    assert result.exception is not None
+    assert "Strict validation failed" in str(result.exception)
+    assert "modeled_death is enabled but death_year is null" in str(result.exception)

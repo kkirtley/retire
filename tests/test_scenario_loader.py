@@ -114,6 +114,85 @@ def test_repo_experimental_analytics_scenario_overrides_canonical_baseline(golde
     ]
 
 
+def test_scenarios_root_contains_only_active_files(golden_scenario_path):
+    scenarios_dir = golden_scenario_path.parent
+    root_entries = {path.name for path in scenarios_dir.iterdir()}
+
+    assert "baseline_canonical.yaml" in root_entries
+    assert "test_baseline_minimal.yaml" in root_entries
+    assert "README.md" in root_entries
+    assert "archive" in root_entries
+    assert "baseline_v1.0.1.yaml" not in root_entries
+    assert "baseline_v1.0.2.yaml" not in root_entries
+
+
+def test_scenario_archive_contains_legacy_baselines(golden_scenario_path):
+    archive_dir = golden_scenario_path.parent / "archive"
+    archived_entries = {path.name for path in archive_dir.iterdir()}
+
+    assert {"baseline_v1.0.1.yaml", "baseline_v1.0.2.yaml"} <= archived_entries
+
+
+def test_loader_rejects_scenario_delta_with_unsupported_extends_field(
+    tmp_path, golden_scenario_path
+):
+    baseline_path = tmp_path / "baseline_canonical.yaml"
+    baseline_path.write_text(
+        golden_scenario_path.parent.joinpath("baseline_canonical.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    scenario_path = tmp_path / "scenario_invalid_extends.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(
+            {
+                "metadata": {
+                    "scenario_name": "Invalid Extends",
+                    "version": "1.0.0",
+                    "description": "Unsupported extends field",
+                    "created": "2026-04-21",
+                    "currency": "USD",
+                    "cadence": "annual",
+                },
+                "extends": "baseline_canonical.yaml",
+                "overrides": {"assumptions": {"inflation_rate": 0.04}},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="may only define metadata and overrides"):
+        load_scenario(scenario_path)
+
+
+def test_loader_rejects_unknown_root_field(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["unexpected_field"] = True
+
+    scenario_path = tmp_path / "unknown-field.yaml"
+    scenario_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unexpected_field"):
+        load_scenario(scenario_path)
+
+
+def test_loader_rejects_percent_of_salary_contribution_after_retirement_date(
+    tmp_path, golden_payload
+):
+    payload = golden_payload
+    payload["contributions"]["schedules"][0]["end_date"] = "2033-01-01"
+
+    scenario_path = tmp_path / "late-employment-contribution.yaml"
+    scenario_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="employment-related contribution 'Husband Traditional 401k employee' must end before simulation.retirement_date",
+    ):
+        load_scenario(scenario_path)
+
+
 def test_loader_rejects_rollover_without_matching_ira_target(tmp_path, golden_payload):
     payload = golden_payload
     payload["strategy"]["account_rollovers"] = {

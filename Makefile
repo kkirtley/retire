@@ -1,6 +1,6 @@
 .PHONY: help install test lint format format-check pre clean venv ui
 
-SCENARIO ?= scenarios/baseline_v1.0.1.yaml
+SCENARIO ?= scenarios/baseline_canonical.yaml
 COMPARE ?=
 
 # Default target

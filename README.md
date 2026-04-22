@@ -159,6 +159,8 @@ The current implementation uses the schema in `retireplan/schema/retirement.py` 
 
 The default execution path is `deterministic_annual`. Historical analysis is an optional secondary comparison layer and is not part of the primary engine mode.
 
+Scenario inheritance is implicit. Active `scenario_*.yaml` files are delta documents that the loader merges onto the sibling `scenarios/baseline_canonical.yaml`; there is no supported `extends` field.
+
 Implemented now:
 - Schema-backed YAML loading and validation
 - CLI `validate` and `run` commands wired to the loader
@@ -191,6 +193,12 @@ See `STAGE_TRACKER.md` for the persistent deterministic stabilization status.
 retireplan validate scenarios/baseline_canonical.yaml
 ```
 
+Force strict validation when you want loader warnings promoted to hard failures:
+
+```bash
+retireplan validate scenarios/baseline_canonical.yaml --strict-validation
+```
+
 ### Run Projection
 
 ```bash
@@ -198,6 +206,20 @@ retireplan run scenarios/baseline_canonical.yaml --out results/baseline_run.json
 ```
 
 The `run` command always executes the `deterministic_annual` engine mode. If a scenario enables `historical_analysis`, the CLI appends that analysis as a secondary report section after the deterministic projection completes.
+
+Strict validation is also available on `run`:
+
+```bash
+retireplan run scenarios/baseline_canonical.yaml --strict-validation --out results/baseline_run.json --charts results/
+```
+
+Current strict-validation behavior hard-fails on schema errors and on loader diagnostics that are warnings in non-strict mode, including stale ages, filename/version mismatches, and incomplete modeled-death data.
+
+Scenario merge behavior is fixed globally in code:
+- objects deep-merge
+- lists replace
+
+`validation.override_merge_rules` remains in the schema for compatibility but does not alter runtime merge behavior.
 
 ### Launch Desktop UI
 

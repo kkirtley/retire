@@ -45,6 +45,11 @@ NOT new features.
 - Do not treat experimental fields as baseline
 - Deterministic annual engine is the default
 - Tests must pass before proceeding
+- Only one canonical baseline is allowed in the `scenarios/` root directory
+- Legacy baselines must be archived or explicitly marked deprecated
+- Tests must never depend on `baseline_canonical.yaml`
+- Scenario variants must extend the canonical baseline through the repo's supported delta mechanism unless they are explicitly standalone test fixtures
+- If flexibility conflicts with deterministic correctness, choose deterministic correctness
 
 ---
 

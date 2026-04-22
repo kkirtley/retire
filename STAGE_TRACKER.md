@@ -27,6 +27,7 @@ Status legend:
 
 - Canonical baseline source of truth: create a new curated `scenarios/baseline_canonical.yaml` derived from `baseline_v1.0.2.yaml`, removing experimental fields and keeping deterministic plus intentionally supported advanced features.
 - Scenario structure: use inheritance through overrides; baseline is the foundation and scenario files are deltas.
+- Scenario inheritance is implicit through `scenario_*.yaml` plus `overrides`; there is no supported `extends` field.
 - Merge semantics: enforce globally in code; objects deep-merge and lists replace. Ignore YAML-defined merge rules for now.
 - Strict validation: CLI `--strict-validation` overrides scenario settings and forces strict behavior.
 - Strict validation failures: fail on structural and logical issues, including unknown fields, invalid references, bad dates, stale `current_age`, version mismatch, and inconsistent modeling assumptions.
@@ -74,3 +75,4 @@ Status legend:
 - 2026-04-21: Completed Task 6 by defaulting core analytics outputs in schema, removing experimental analytics tracking from the canonical baseline and test fixture, and preserving those experimental fields in `scenario_experimental_analytics.yaml` as an opt-in variant.
 - 2026-04-21: Completed Task 2 by making `deterministic_annual` the explicit CLI execution mode, surfacing it in the run payload and console output, gating historical analysis behind scenario opt-in, and updating README wording to document the deterministic-first execution path.
 - 2026-04-21: Closed the remaining spending-guardrail gap by making `resource_pressure` reduce base living expenses toward the configured floor during yearly cashflow settlement before declaring failure, with focused projection coverage.
+- 2026-04-21: Completed the cleanup alignment pass by archiving legacy baseline YAMLs under `scenarios/archive/`, switching the Makefile default scenario to `baseline_canonical.yaml`, documenting implicit scenario inheritance and fixed merge semantics, adding AGENTS guardrails for scenario roles, and extending strict-validation and scenario-hygiene regression coverage.
