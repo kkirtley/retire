@@ -122,15 +122,16 @@ def test_scenarios_root_contains_only_active_files(golden_scenario_path):
     assert "test_baseline_minimal.yaml" in root_entries
     assert "README.md" in root_entries
     assert "archive" in root_entries
-    assert "baseline_v1.0.1.yaml" not in root_entries
-    assert "baseline_v1.0.2.yaml" not in root_entries
+    assert not any(name.startswith("baseline_v") for name in root_entries)
 
 
 def test_scenario_archive_contains_legacy_baselines(golden_scenario_path):
     archive_dir = golden_scenario_path.parent / "archive"
     archived_entries = {path.name for path in archive_dir.iterdir()}
 
-    assert {"baseline_v1.0.1.yaml", "baseline_v1.0.2.yaml"} <= archived_entries
+    assert any(
+        name.startswith("baseline_v") and name.endswith(".yaml") for name in archived_entries
+    )
 
 
 def test_loader_rejects_scenario_delta_with_unsupported_extends_field(

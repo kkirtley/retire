@@ -8,6 +8,20 @@ from retireplan.cli.main import app
 runner = CliRunner()
 
 
+def test_validate_help_includes_strict_validation_flag():
+    result = runner.invoke(app, ["validate", "--help"])
+
+    assert result.exit_code == 0
+    assert "--strict-validation" in result.stdout
+
+
+def test_run_help_includes_strict_validation_flag():
+    result = runner.invoke(app, ["run", "--help"])
+
+    assert result.exit_code == 0
+    assert "--strict-validation" in result.stdout
+
+
 def test_validate_command_reports_diagnostics(golden_scenario_path, golden_loaded):
     result = runner.invoke(app, ["validate", str(golden_scenario_path)])
 

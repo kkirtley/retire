@@ -199,6 +199,8 @@ Force strict validation when you want loader warnings promoted to hard failures:
 retireplan validate scenarios/baseline_canonical.yaml --strict-validation
 ```
 
+For real household runs, prefer `--strict-validation` so stale ages, filename/version mismatches, and incomplete modeled-death inputs fail before projection output is produced.
+
 ### Run Projection
 
 ```bash

@@ -1,329 +1,273 @@
-# Deterministic Annual Engine Cleanup and Alignment Pass
+# Final Deterministic Annual Engine Alignment Pass
 
 ## Objective
 
-Perform a focused cleanup and alignment pass on the retirement-planning repo to make the **deterministic annual engine** coherent, predictable, and safe for continued development.
+Complete the remaining alignment work for the deterministic annual retirement engine.
 
-This pass is about:
-- scenario hygiene
-- schema/loader/docs alignment
-- strict validation wiring
-- deterministic execution integrity
+This pass is focused on:
+- repo consistency
+- loader / schema / README alignment
+- strict-validation usability
+- test-fixture discipline
+- removal of docs-to-code drift
 
-This pass is **not** for adding new features.
+This is **not** a feature-expansion pass.
 
 ---
 
-## Scope
+## In Scope
 
-### In Scope
-- scenario file cleanup and inheritance consistency
-- README and `scenarios/README.md` alignment
-- AGENTS.md guardrails
-- strict validation wiring and tests
-- merge-behavior clarification
-- schema/docs reconciliation
-- deterministic annual regression hardening
+- scenario-root consistency checks
+- README and CLI documentation cleanup
+- strict-validation surface polish
+- committed test-fixture usage
+- schema/docs reconciliation for optional features
+- merge-policy clarification
+- deterministic regression reinforcement
 
-### Out of Scope
+## Out of Scope
+
 - Monte Carlo
-- UI enhancements
-- new scenario concepts
-- major package refactors
+- UI redesign
 - new planning features
+- new YAML concepts
+- broad refactors unrelated to deterministic annual correctness
 
 ---
 
 ## Mandatory Rules
 
 - Do not invent new YAML fields.
-- Do not silently rename YAML fields.
-- Do not broaden feature scope.
-- Do not weaken strict validation.
-- Do not use legacy baseline files as active scenario sources.
-- Do not let tests depend on the real household baseline.
-- Deterministic annual remains the canonical execution path.
+- Do not loosen strict validation.
+- Do not add new optional features in this pass.
+- Do not let README claim support for behavior not present in schema and code.
+- Do not let tests depend on the live household baseline.
+- Deterministic annual remains the canonical engine path.
 
 ---
 
-# Task 1 — Scenario Directory Hygiene
+# Task 1 — Verify Scenario Root Matches Intended Layout
 
 ## Goal
-Make the scenario directory unambiguous and safe.
+Confirm the committed repo state matches the documented scenario layout.
+
+## Required Checks
+- `scenarios/` root should contain only:
+  - `baseline_canonical.yaml`
+  - `test_baseline_minimal.yaml`
+  - `scenario_*.yaml`
+  - `README.md`
+  - optional `archive/` folder
+- Legacy baseline files must not remain in root if they are archived.
+
+## Required Action
+- If legacy baselines still exist in root, remove or relocate them.
+- If they are already archived, ensure no remaining docs/tests reference them as active root files.
+
+## Acceptance Criteria
+- Scenario root layout matches `scenarios/README.md`
+- No ambiguity remains about active vs archived baselines
+
+---
+
+# Task 2 — Make Strict Validation a First-Class CLI Workflow
+
+## Goal
+Surface strict validation clearly to users and tests.
 
 ## Required Changes
-1. Keep only **one canonical baseline** in the root of `scenarios/`:
-   - `baseline_canonical.yaml`
+- Confirm CLI supports a strict-validation flag end-to-end.
+- Document strict-validation usage in `README.md`.
 
-2. Keep only **one minimal test fixture** in the root of `scenarios/`:
-   - `test_baseline_minimal.yaml`
-
-3. Move legacy baseline files out of the root:
-   - `baseline_v1.0.1.yaml`
-   - `baseline_v1.0.2.yaml`
-
-### Move them to:
-- `scenarios/archive/`
-
-or rename them clearly as deprecated if archiving is not used.
+## README must include examples like:
+- `retireplan validate scenarios/baseline_canonical.yaml --strict-validation`
+- `retireplan run scenarios/baseline_canonical.yaml --strict-validation --out ...`
 
 ## Acceptance Criteria
-- `scenarios/` root contains one canonical baseline only
-- legacy baseline files are not co-located with canonical baseline
-- no docs or tests reference archived/deprecated baselines as active files
+- README documents strict-validation explicitly
+- CLI help and docs match actual behavior
+- strict-validation is not only an internal loader option
 
 ---
 
-# Task 2 — Enforce Scenario Inheritance Pattern
+# Task 3 — Add Direct Tests for Strict Validation
 
 ## Goal
-Make scenario variants extend the canonical baseline rather than duplicate it.
+Prove strict mode actually hard-fails where expected.
+
+## Required Tests
+Add tests that verify strict mode fails on:
+- stale `current_age`
+- filename/version mismatch
+- death-model enabled with null death year
+- invalid references
+- unsupported scenario-delta keys
+
+## Acceptance Criteria
+- loader-level strict-validation tests exist
+- CLI-level strict-validation tests exist if CLI surface supports it
+- strict mode behavior is not implicit or untested
+
+---
+
+# Task 4 — Use the Committed Test Fixture Intentionally
+
+## Goal
+Make `test_baseline_minimal.yaml` the actual committed fixture, not just a file that exists.
 
 ## Required Changes
-For every `scenario_*.yaml` file:
-- ensure it uses the existing inheritance / override mechanism
-- ensure it references:
-  - `extends: baseline_canonical.yaml`
-  if that is the repo’s chosen inheritance syntax
-
-If the current loader uses a different inheritance field name, standardize all scenario files to the actual supported field name.
+- Add tests that explicitly load `scenarios/test_baseline_minimal.yaml`
+- Keep inline temporary fixtures only where they are testing merge mechanics or malformed inputs
+- Do not use `baseline_canonical.yaml` in automated regression tests
 
 ## Acceptance Criteria
-- every `scenario_*.yaml` extends the canonical baseline
-- no scenario variant fully duplicates baseline content unless explicitly documented as standalone
-- scenario inheritance works in loader tests
+- committed test fixture is actually used by tests
+- test strategy is obvious from repo structure
+- real household baseline is not part of test stability
 
 ---
 
-# Task 3 — Update scenarios/README.md
+# Task 5 — Reconcile README with Schema on Optional Features
 
 ## Goal
-Document scenario roles clearly so humans and Copilot stop drifting.
+Eliminate docs-to-schema drift.
 
-## Required Content
-Document these categories explicitly:
+## Required Audit
+Specifically verify the following documented feature:
+- `strategy.account_rollovers`
 
-### `baseline_canonical.yaml`
-- single source of truth for real household baseline
-- deterministic annual compatible
-- schema-clean
+## Required Action
+Choose one:
+1. Add `account_rollovers` to schema + validation + code + tests
+2. Remove or downgrade the README claim until it is truly supported
 
-### `test_baseline_minimal.yaml`
-- used only for automated tests
-- stable and intentionally small
-- not a planning baseline
-
-### `scenario_*.yaml`
-- variants / experiments
-- should extend canonical baseline unless specifically testing standalone behavior
-
-### `archive/`
-- deprecated or historical baseline files
-- not to be used in tests or as active baselines
+## Rule
+No feature may be documented as supported unless:
+- schema supports it
+- loader accepts it
+- engine uses it
+- tests cover it
 
 ## Acceptance Criteria
-- `scenarios/README.md` exists and reflects actual repo behavior
-- README examples match actual file names
+- README and schema agree
+- optional-feature claims are truthful
 
 ---
 
-# Task 4 — Update AGENTS.md with Scenario Guardrails
+# Task 6 — Clarify Merge Policy in Docs and Code
 
 ## Goal
-Prevent future drift.
+Stop ambiguity around inheritance behavior.
 
-## Add These Rules
-- Only one canonical baseline is allowed in the `scenarios/` root directory.
-- Legacy baselines must be archived or explicitly marked deprecated.
-- Tests must never depend on `baseline_canonical.yaml`.
-- Scenario variants must extend the canonical baseline unless explicitly designed as standalone tests.
-- If there is any conflict between flexibility and deterministic correctness, choose deterministic correctness.
-
-## Acceptance Criteria
-- AGENTS.md reflects these rules clearly
-- no ambiguity remains around scenario roles
-
----
-
-# Task 5 — Reconcile README with Actual Repo State
-
-## Goal
-Remove doc/code drift.
+## Current Behavior to Preserve Unless Fully Reworked
+- scenario delta files may only define:
+  - `metadata`
+  - `overrides`
+- loader auto-loads sibling `baseline_canonical.yaml`
+- object values deep merge
+- list values replace entirely
 
 ## Required Changes
-Audit README and fix any examples, references, or claims that do not match committed files and actual code behavior.
-
-Specifically verify:
-- referenced scenario filenames actually exist
-- strict-validation usage is documented if implemented
-- deterministic annual is documented as the canonical path
-- optional features documented in README are actually supported by schema and code
+- Make sure README and `scenarios/README.md` both describe exactly this behavior
+- If schema still implies broader merge configurability than code actually supports, either:
+  - remove that implication
+  - or mark it as future/unsupported
 
 ## Acceptance Criteria
-- README file references only real files and real supported behavior
-- no unsupported optional feature is documented as if it is fully implemented
-
----
-
-# Task 6 — Finish Strict Validation Wiring
-
-## Goal
-Make strict validation a real surfaced behavior, not just internal plumbing.
-
-## Required Changes
-1. Confirm CLI supports a strict-validation flag.
-2. Document strict-validation usage in README.
-3. Add tests for strict-validation behavior.
-
-## Strict Mode Must Fail On
-- unknown / unsupported fields
-- stale age inconsistent with DOB and simulation start
-- invalid account references
-- contribution dates after retirement date
-- critical death-model inconsistencies
-- scenario inheritance / merge errors
-
-## Acceptance Criteria
-- strict-validation is callable from CLI
-- README documents it
-- tests prove hard-fail behavior
-
----
-
-# Task 7 — Resolve Merge-Behavior Ambiguity
-
-## Goal
-Stop mismatch between declared merge policy and implemented behavior.
-
-## Required Changes
-Choose one of these paths and implement/document it clearly:
-
-### Option A (preferred if simplicity is the goal)
-- Make merge behavior global and fixed:
-  - objects = deep merge
-  - lists = replace
-- Remove any implication that scenario-defined merge policy changes runtime behavior
-
-### Option B
-- Actually honor merge-policy config from schema
-
-If Option B is not fully implemented, do Option A.
-
-## Acceptance Criteria
-- schema, loader, tests, and docs all agree on merge behavior
+- merge policy is described once and consistently
 - no “declared but not implemented” merge flexibility remains
 
 ---
 
-# Task 8 — Reconcile Schema vs Documented Optional Features
+# Task 7 — Add a Repo Consistency Test for Scenario Layout
 
 ## Goal
-Make sure documented features are truly schema-backed and code-backed.
+Prevent scenario-folder drift from returning later.
 
-## Required Audit
-Check these specifically:
-- `account_rollovers`
-- advanced QCD fields
-- any optional scenario field mentioned in README but absent from schema
-- any field supported in schema but not actually consumed by deterministic annual engine
-
-## Required Outcome
-For each feature:
-- either keep it and ensure schema + loader + engine + tests support it
-- or remove/de-document it until properly implemented
+## Required Test
+Add a test that asserts:
+- `baseline_canonical.yaml` exists
+- `test_baseline_minimal.yaml` exists
+- `scenario_*.yaml` files exist or are optional
+- archived legacy baselines are not treated as active baselines
+- no test depends on archived baseline files
 
 ## Acceptance Criteria
-- no feature is documented as supported unless schema and code both support it
-- no schema field remains effectively dead without explanation
+- scenario layout becomes regression-protected
 
 ---
 
-# Task 9 — Strengthen Deterministic Annual Regression Coverage
+# Task 8 — Tighten Deterministic Documentation
 
 ## Goal
-Protect the deterministic annual engine from future drift.
-
-## Required Tests
-Ensure regression coverage includes:
-- canonical baseline loads
-- test baseline loads
-- scenario inheritance works
-- retirement transition on `2033-01-01`
-- proration from `2026-07-01`
-- husband SS starts at 70
-- wife SS starts at 65
-- conversion taxes source from bridge first
-- bridge only funds living when necessary
-- Car Fund is never used
-- spending floor can drop to `$60,000`
-- survivor transition behavior
-- QCD satisfies RMD where applicable
-
-## Acceptance Criteria
-- deterministic annual regressions run green
-- tests do not rely on the real baseline file
-- scenario inheritance and strict-validation are both covered
-
----
-
-# Task 10 — Naming Consistency Pass
-
-## Goal
-Reduce scenario-name drift and improve clarity.
+Make deterministic annual behavior explicit and primary.
 
 ## Required Changes
-Normalize `scenario_*.yaml` naming to a consistent pattern.
-
-Examples:
-- `scenario_high_inflation.yaml`
-- `scenario_historical_analysis.yaml`
-- `scenario_experimental_analytics.yaml`
-
-Choose a consistent convention and apply it across all scenario files.
+Update README and any stage tracker text so they state clearly:
+- `run` executes deterministic annual mode by default
+- historical analysis is secondary
+- scenario inheritance is filename-based and baseline-relative
+- strict validation is available and recommended for real household runs
 
 ## Acceptance Criteria
-- scenario filenames follow one naming pattern
-- docs use the same pattern
+- docs reflect actual current architecture
+- no stale “maybe” language remains around deterministic path
+
+---
+
+# Task 9 — Regression Audit for Current Deterministic Behavior
+
+## Goal
+Lock the current deterministic annual behavior before further changes.
+
+## Required Regression Coverage
+Ensure tests cover:
+- canonical baseline load
+- minimal test baseline load
+- scenario delta inheritance
+- strict-validation failures
+- deterministic `run` path
+- bridge-tax-first behavior
+- car fund never used
+- proration from `2026-07-01`
+- retirement transition on `2033-01-01`
+
+## Acceptance Criteria
+- deterministic annual path is protected from drift
+- cleanup pass leaves repo more stable than before
 
 ---
 
 # Implementation Order
 
-1. Task 1 — Scenario directory hygiene
-2. Task 2 — Scenario inheritance enforcement
-3. Task 3 — Update `scenarios/README.md`
-4. Task 4 — Update AGENTS.md guardrails
-5. Task 5 — README reconciliation
-6. Task 6 — Strict validation wiring
-7. Task 7 — Merge-behavior clarification
-8. Task 8 — Schema/docs feature reconciliation
-9. Task 9 — Deterministic regression coverage
-10. Task 10 — Naming consistency pass
+1. Task 1 — Verify scenario root layout
+2. Task 2 — Document strict validation
+3. Task 3 — Add strict-validation tests
+4. Task 4 — Use committed test fixture intentionally
+5. Task 5 — Reconcile README vs schema for optional features
+6. Task 6 — Clarify merge policy
+7. Task 7 — Add scenario-layout consistency test
+8. Task 8 — Tighten deterministic docs
+9. Task 9 — Final regression audit
 
 ---
 
 # Deliverables
 
 At the end of this pass, the repo should have:
-
-- one canonical baseline in `scenarios/`
-- one minimal committed test fixture
-- scenario variants extending canonical baseline
-- archived legacy baseline files
-- aligned README, `scenarios/README.md`, and AGENTS.md
+- fully consistent scenario layout
 - strict-validation documented and tested
-- merge behavior clearly implemented and documented
-- deterministic annual regression suite hardened
+- committed test fixture actually used
+- no README/schema drift on optional features
+- one clearly documented merge policy
+- stronger deterministic annual regression protection
 
 ---
 
 # Final Instruction
 
-Favor **deterministic correctness over convenience**.
+Choose **truthful documentation and deterministic correctness** over convenience.
 
-If there is a conflict between:
-- flexibility
-- backward compatibility
-- or strict deterministic behavior
-
-choose strict deterministic behavior.
+If a feature is only partially supported:
+- do not document it as complete
+- either implement it fully or downgrade the claim
