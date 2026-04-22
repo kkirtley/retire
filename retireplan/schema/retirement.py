@@ -178,6 +178,11 @@ class StrictBaseModel(BaseModel):
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
 
+RESTRICTED_RETIREMENT_CASHFLOW_POLICY = "never_use_for_retirement_model_cashflows"
+BRIDGE_ACCOUNT_NAME = "Taxable Bridge Account"
+HOUSEHOLD_OPERATING_CASH_ACCOUNT_NAME = "Household Operating Cash"
+
+
 # ============================================================
 # Common helpers
 # ============================================================
@@ -412,12 +417,6 @@ class Person(StrictBaseModel):
     retirement_age: int = Field(ge=0)
     modeled_death: ModeledDeath
 
-    @model_validator(mode="after")
-    def validate_ages(self) -> "Person":
-        if self.retirement_age < self.current_age:
-            raise ValueError("retirement_age must be >= current_age")
-        return self
-
 
 class ExpenseStepdownAfterHusbandDeath(StrictBaseModel):
     enabled: bool
@@ -569,6 +568,14 @@ class Account(StrictBaseModel):
     def validate_return_configuration(self) -> "Account":
         if self.return_rate is None and not self.return_schedule:
             raise ValueError(f"account '{self.name}' must define return_rate or return_schedule")
+        if (
+            self.restriction is not None
+            and self.restriction != RESTRICTED_RETIREMENT_CASHFLOW_POLICY
+        ):
+            raise ValueError(
+                f"account '{self.name}' uses an unsupported restriction; "
+                f"expected {RESTRICTED_RETIREMENT_CASHFLOW_POLICY}"
+            )
         if self.return_schedule:
             sorted_entries = sorted(self.return_schedule, key=lambda x: x.start_date)
             for prev, curr in pairwise(sorted_entries):
@@ -1112,15 +1119,28 @@ class Withdrawals(StrictBaseModel):
 
 
 class AnalyticsSubsection(StrictBaseModel):
-    enabled: bool
-    track: List[str]
+    enabled: bool = False
+    track: List[str] = Field(default_factory=list)
 
 
 class Analytics(StrictBaseModel):
-    required_outputs: List[str]
-    conversion_efficiency: AnalyticsSubsection
-    rmd_projection: AnalyticsSubsection
-    charitable_tracking: AnalyticsSubsection
+    required_outputs: List[str] = Field(
+        default_factory=lambda: [
+            "yearly_ledger",
+            "account_balances_by_year",
+            "taxes_by_year",
+            "conversion_totals_by_year",
+            "rmd_qcd_giving_by_year",
+            "failure_year",
+            "net_worth",
+            "total_taxes",
+            "total_conversions",
+            "ira_balance_at_70",
+        ]
+    )
+    conversion_efficiency: AnalyticsSubsection = Field(default_factory=AnalyticsSubsection)
+    rmd_projection: AnalyticsSubsection = Field(default_factory=AnalyticsSubsection)
+    charitable_tracking: AnalyticsSubsection = Field(default_factory=AnalyticsSubsection)
 
 
 class AccountRollovers(StrictBaseModel):
@@ -1133,7 +1153,7 @@ class StrategyConfig(StrictBaseModel):
     roth_conversions: RothConversions
     charitable_giving: CharitableGiving
     withdrawals: Withdrawals
-    analytics: Analytics
+    analytics: Analytics = Field(default_factory=Analytics)
     account_rollovers: AccountRollovers = Field(default_factory=AccountRollovers)
 
 
@@ -1162,26 +1182,72 @@ class RetirementScenario(StrictBaseModel):
     historical_analysis: HistoricalAnalysis = Field(default_factory=HistoricalAnalysis)
     overrides: Dict[str, Any]
 
-    def _validate_account_references(self, account_names: set[str]) -> None:
-        surplus_allocation = self.contributions.surplus_allocation
-        if (
-            surplus_allocation.enabled
-            and surplus_allocation.destination_account not in account_names
+    def _account_by_name(self, account_name: str) -> Optional[Account]:
+        return next((account for account in self.accounts if account.name == account_name), None)
+
+    def _restricted_account_names(self) -> set[str]:
+        return {
+            account.name
+            for account in self.accounts
+            if account.restriction == RESTRICTED_RETIREMENT_CASHFLOW_POLICY
+        }
+
+    def _bridge_account_required(self) -> bool:
+        if self.contributions.surplus_allocation.destination_account == BRIDGE_ACCOUNT_NAME:
+            return True
+        if any(
+            schedule.destination_account == BRIDGE_ACCOUNT_NAME
+            for schedule in self.contributions.schedules
         ):
+            return True
+        if WithdrawalOrderType.TAXABLE_BRIDGE_ACCOUNT in self.strategy.withdrawals.order:
+            return True
+        if (
+            ConversionTaxSource.TAXABLE_BRIDGE_ACCOUNT
+            in self.strategy.roth_conversions.tax_payment.source_order
+        ):
+            return True
+        return False
+
+    def _validate_destination_account(self, account_name: str, context: str) -> None:
+        destination_account = self._account_by_name(account_name)
+        if destination_account is None:
+            raise ValueError(f"{context} must refer to an existing account")
+        if destination_account.contributions_enabled is False:
+            raise ValueError(f"{context} must refer to an account that accepts contributions")
+
+    def _validate_account_references(self, account_names: set[str]) -> None:
+        if self._bridge_account_required() and BRIDGE_ACCOUNT_NAME not in account_names:
             raise ValueError(
-                "contributions.surplus_allocation.destination_account must refer to an existing account"
+                f"{BRIDGE_ACCOUNT_NAME} must exist when bridge-account strategy paths are configured"
+            )
+
+        surplus_allocation = self.contributions.surplus_allocation
+        if surplus_allocation.enabled and surplus_allocation.destination_account is not None:
+            self._validate_destination_account(
+                surplus_allocation.destination_account,
+                "contributions.surplus_allocation.destination_account",
             )
 
         for schedule in self.contributions.schedules:
-            if schedule.destination_account not in account_names:
-                raise ValueError(
-                    f"contribution '{schedule.name}' destination_account must refer to an existing account"
-                )
+            self._validate_destination_account(
+                schedule.destination_account,
+                f"contribution '{schedule.name}' destination_account",
+            )
 
         source_account_name = self.strategy.roth_conversions.tax_payment.source_account_name
         if source_account_name not in account_names:
             raise ValueError(
                 "strategy.roth_conversions.tax_payment.source_account_name must refer to an existing account"
+            )
+
+        if (
+            ConversionTaxSource.HOUSEHOLD_OPERATING_CASH
+            in self.strategy.roth_conversions.tax_payment.source_order
+            and HOUSEHOLD_OPERATING_CASH_ACCOUNT_NAME not in account_names
+        ):
+            raise ValueError(
+                "Household Operating Cash must exist when household_operating_cash is in tax source order"
             )
 
         for restricted_name in self.strategy.withdrawals.restrictions.never_use_accounts:
@@ -1210,27 +1276,79 @@ class RetirementScenario(StrictBaseModel):
                 )
 
     def _validate_withdrawal_strategy(self, account_names: set[str]) -> None:
-        if "Car Fund" not in self.strategy.withdrawals.restrictions.never_use_accounts:
+        restricted_account_names = self._restricted_account_names()
+        configured_never_use_accounts = set(
+            self.strategy.withdrawals.restrictions.never_use_accounts
+        )
+
+        missing_restricted_accounts = restricted_account_names - configured_never_use_accounts
+        if missing_restricted_accounts:
+            missing_names = ", ".join(sorted(missing_restricted_accounts))
             raise ValueError(
-                "Car Fund must appear in strategy.withdrawals.restrictions.never_use_accounts"
+                "restricted accounts must appear in strategy.withdrawals.restrictions.never_use_accounts: "
+                f"{missing_names}"
             )
+
+        non_restricted_never_use_accounts = configured_never_use_accounts - restricted_account_names
+        if non_restricted_never_use_accounts:
+            unexpected_names = ", ".join(sorted(non_restricted_never_use_accounts))
+            raise ValueError(
+                "never_use_accounts may only contain accounts marked with restriction "
+                f"{RESTRICTED_RETIREMENT_CASHFLOW_POLICY}: {unexpected_names}"
+            )
+
+        surplus_destination = self.contributions.surplus_allocation.destination_account
+        if surplus_destination in restricted_account_names:
+            raise ValueError(
+                "restricted accounts cannot be used as surplus allocation destinations"
+            )
+
+        source_account_name = self.strategy.roth_conversions.tax_payment.source_account_name
+        if source_account_name in restricted_account_names:
+            raise ValueError("restricted accounts cannot be used as conversion tax payment sources")
 
         if (
             ConversionTaxSource.TAXABLE_BRIDGE_ACCOUNT
             in self.strategy.roth_conversions.tax_payment.source_order
-            and "Taxable Bridge Account" not in account_names
+            and BRIDGE_ACCOUNT_NAME not in account_names
         ):
             raise ValueError(
-                "Taxable Bridge Account must exist when taxable_bridge_account is in tax source order"
+                f"{BRIDGE_ACCOUNT_NAME} must exist when taxable_bridge_account is in tax source order"
+            )
+
+        if (
+            WithdrawalOrderType.TAXABLE_BRIDGE_ACCOUNT in self.strategy.withdrawals.order
+            and BRIDGE_ACCOUNT_NAME not in account_names
+        ):
+            raise ValueError(
+                f"{BRIDGE_ACCOUNT_NAME} must exist when taxable_bridge_account is in withdrawal order"
             )
 
     def _validate_charitable_giving(self, account_names: set[str]) -> None:
         del account_names
         if self.strategy.charitable_giving.qcd.enabled:
             qcd_types = set(self.strategy.charitable_giving.qcd.applies_to)
-            existing_types = {account.type for account in self.accounts}
-            if not (qcd_types & existing_types):
+            applicable_accounts = [
+                account
+                for account in self.accounts
+                if account.type in qcd_types
+                and account.owner in {AccountOwner.HUSBAND, AccountOwner.WIFE}
+                and account.withdrawals_enabled is not False
+                and account.restriction != RESTRICTED_RETIREMENT_CASHFLOW_POLICY
+            ]
+            if not applicable_accounts:
                 raise ValueError("QCD is enabled but no applicable account type exists in accounts")
+
+            if self.strategy.charitable_giving.qcd.depletion_target.enabled:
+                for owner in self.strategy.charitable_giving.qcd.depletion_target.owners:
+                    owner_has_applicable_account = any(
+                        account.owner == owner for account in applicable_accounts
+                    )
+                    if not owner_has_applicable_account:
+                        owner_label = owner.value if isinstance(owner, AccountOwner) else str(owner)
+                        raise ValueError(
+                            f"QCD depletion target owner {owner_label} requires an applicable IRA account"
+                        )
 
         if self.strategy.charitable_giving.coordination_rules.prohibit_other_accounts_for_giving:
             if (

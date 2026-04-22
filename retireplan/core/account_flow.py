@@ -79,7 +79,7 @@ def settle_net_cash_flow(
             surplus_allocations[surplus_destination] = round(net_cash_flow, 2)
         return withdrawals, surplus_allocations, net_cash_flow, 0
 
-    withdrawals, unmet_need = withdraw_to_cover_deficit(scenario, balances, -net_cash_flow)
+    withdrawals, unmet_need = withdraw_to_cover_deficit(scenario, period, balances, -net_cash_flow)
     return (
         withdrawals,
         surplus_allocations,
@@ -135,28 +135,56 @@ def _account_accepts_surplus(account: Account, period: TimelinePeriod) -> bool:
 
 def withdraw_to_cover_deficit(
     scenario: RetirementScenario,
+    period: TimelinePeriod,
     balances: dict[str, float],
     required_amount: float,
 ) -> tuple[dict[str, float], float]:
     withdrawals: dict[str, float] = {}
     remaining = required_amount
     restricted_accounts = set(scenario.strategy.withdrawals.restrictions.never_use_accounts)
+    immediate_accounts: list[Account] = []
+    deferred_accounts: list[Account] = []
 
     for order_item in scenario.strategy.withdrawals.order:
-        for account in matching_accounts(order_item, scenario.accounts):
-            if account.name in restricted_accounts or account.withdrawals_enabled is False:
-                continue
-            available = balances[account.name]
-            if available <= 0:
-                continue
-            amount = min(available, remaining)
-            balances[account.name] -= amount
-            withdrawals[account.name] = round(withdrawals.get(account.name, 0.0) + amount, 2)
-            remaining = round(remaining - amount, 10)
-            if remaining <= 0:
-                return withdrawals, 0.0
+        matched_accounts = matching_accounts(order_item, scenario.accounts)
+        if (
+            order_item == WithdrawalOrderType.TAXABLE_BRIDGE_ACCOUNT
+            and _defer_bridge_for_living_expenses(scenario, period)
+        ):
+            deferred_accounts.extend(matched_accounts)
+        else:
+            immediate_accounts.extend(matched_accounts)
+
+    for account in [*immediate_accounts, *deferred_accounts]:
+        if account.name in restricted_accounts or account.withdrawals_enabled is False:
+            continue
+        available = balances[account.name]
+        if available <= 0:
+            continue
+        amount = min(available, remaining)
+        balances[account.name] -= amount
+        withdrawals[account.name] = round(withdrawals.get(account.name, 0.0) + amount, 2)
+        remaining = round(remaining - amount, 10)
+        if remaining <= 0:
+            return withdrawals, 0.0
 
     return withdrawals, max(remaining, 0.0)
+
+
+def _defer_bridge_for_living_expenses(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+) -> bool:
+    if period.husband_age >= 70:
+        return False
+
+    tax_payment_config = scenario.strategy.roth_conversions.tax_payment
+    bridge_usage = scenario.strategy.withdrawals.bridge_usage.pre_age_70
+    if not tax_payment_config.allow_bridge_for_living_expenses:
+        return True
+    if bridge_usage.secondary_use == "living_expenses_if_necessary":
+        return True
+    return tax_payment_config.use_bridge_for_living_only_if_absolutely_necessary
 
 
 def matching_accounts(order_item: WithdrawalOrderType, accounts: list[Account]) -> list[Account]:

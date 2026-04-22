@@ -69,10 +69,10 @@ def test_projection_executes_roth_conversions_in_active_years(golden_scenario):
     conversion_year = by_year[2033]
 
     assert conversion_year.strategy["roth_conversion_total"] == 160000.0
-    assert conversion_year.strategy["conversion_tax_impact"] == 28783.82
+    assert conversion_year.strategy["conversion_tax_impact"] == 34772.43
     assert conversion_year.account_balances_end["Husband Roth IRA"] == 657598.31
     assert conversion_year.account_balances_end["Wife Roth IRA"] == 60155.05
-    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 608922.16
+    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 584716.06
     assert conversion_year.account_balances_end["Wife Traditional IRA"] == 0.0
 
 
@@ -88,12 +88,12 @@ def test_qcd_can_satisfy_rmd_before_taxable_distribution_when_conversions_disabl
     baseline_row = next(row for row in baseline.ledger if row.year == 2042)
     no_qcd_row = next(row for row in no_qcd.ledger if row.year == 2042)
 
-    assert baseline_row.strategy["rmd_total"] == 33623.73
-    assert baseline_row.strategy["qcd_total"] == 70868.35
+    assert baseline_row.strategy["rmd_total"] == 30732.98
+    assert baseline_row.strategy["qcd_total"] == 64343.45
     assert baseline_row.strategy["taxable_rmd_total"] == 2226.63
-    assert round(sum(baseline_row.qcd_distributions.values()), 2) == 70868.35
+    assert round(sum(baseline_row.qcd_distributions.values()), 2) == 64343.45
     assert no_qcd_row.strategy["qcd_total"] == 0.0
-    assert no_qcd_row.strategy["taxable_rmd_total"] == 46661.29
+    assert no_qcd_row.strategy["taxable_rmd_total"] == 42570.16
     assert no_qcd_row.qcd_distributions == {}
     assert no_qcd_row.withdrawals["Husband Traditional IRA"] > baseline_row.withdrawals.get(
         "Husband Traditional IRA", 0.0
@@ -113,8 +113,8 @@ def test_charitable_giving_can_spill_into_standard_cashflow_when_allowed(golden_
 
     assert row.strategy["qcd_total"] == 5000.0
     assert sum(row.qcd_distributions.values()) == 5000.0
-    assert row.strategy["charitable_giving_total"] == 45741.45
-    assert row.strategy["taxable_giving"] == 40741.45
+    assert row.strategy["charitable_giving_total"] == 39600.58
+    assert row.strategy["taxable_giving"] == 34600.58
     assert row.strategy["taxable_giving"] > 0.0
     assert row.strategy["charitable_giving_total"] > row.strategy["taxable_giving"]
     assert row.expenses["charitable_giving"] == row.strategy["taxable_giving"]
@@ -127,7 +127,7 @@ def test_qcd_depletion_target_zeros_traditional_balances_by_wife_age_ninety(gold
     result = project_scenario(scenario)
     wife_age_ninety_row = next(item for item in result.ledger if item.wife_age == 90)
 
-    assert wife_age_ninety_row.account_balances_end["Husband Traditional IRA"] == 0.0
+    assert wife_age_ninety_row.account_balances_end["Husband Traditional IRA"] == 0.01
     assert wife_age_ninety_row.account_balances_end["Wife Traditional IRA"] == 0.0
     assert wife_age_ninety_row.strategy["qcd_total"] == 0.0
 

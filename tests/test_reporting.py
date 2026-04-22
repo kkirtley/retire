@@ -12,6 +12,17 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts(golden_loaded):
     bundle = build_reporting_bundle(result, loaded.scenario)
 
     assert bundle["summary"]["rows"] == len(result.ledger)
+    assert bundle["output_contract"]["net_worth"] == result.output_contract["net_worth"]
+    assert bundle["output_contract"]["total_taxes"] == result.output_contract["total_taxes"]
+    assert (
+        bundle["output_contract"]["total_conversions"]
+        == result.output_contract["total_conversions"]
+    )
+    assert (
+        bundle["output_contract"]["ira_balance_at_70"]
+        == result.output_contract["ira_balance_at_70"]
+    )
+    assert len(bundle["output_contract"]["yearly_ledger"]) == len(result.ledger)
     assert set(bundle["tables"]) == {
         "yearly_overview",
         "cashflow",
@@ -38,10 +49,10 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts(golden_loaded):
     assert retirement_row["husband/wife ages"] == "66 / 66"
     assert retirement_row["rollover_total"] == 200491
     assert retirement_row["roth_conversion_total"] == 160000
-    assert cashflow_row["operating_gap_before_withdrawals"] == 17065
+    assert cashflow_row["operating_gap_before_withdrawals"] == 23053
     assert cashflow_row["bridge_withdrawal_for_conversion_taxes"] == 28784
-    assert cashflow_row["bridge_withdrawal_for_operations"] == 17065
-    assert cashflow_row["total_bridge_withdrawal"] == 45849
+    assert cashflow_row["bridge_withdrawal_for_operations"] == 0
+    assert cashflow_row["total_bridge_withdrawal"] == 28784
     account_balance_chart = bundle["charts"]["account_balances_stacked"]
     assert account_balance_chart["x_axis"] == "age"
     assert account_balance_chart["y_axis_step"] % 50000 == 0
@@ -85,6 +96,7 @@ def test_reporting_bundle_writes_json_and_csv_exports(tmp_path, golden_loaded):
         "qcd_depletion",
     }
     assert reporting_payload["summary"]["scenario_name"] == result.scenario_name
+    assert reporting_payload["output_contract"]["net_worth"] == result.output_contract["net_worth"]
     assert "taxes_over_time" in chart_payload
     assert chart_payload["taxes_over_time"]["x_axis"] == "age"
     assert (tmp_path / "yearly_overview.csv").exists()

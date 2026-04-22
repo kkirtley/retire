@@ -10,6 +10,7 @@ from typing import Any
 from retireplan.core import ProjectionResult
 from retireplan.core.historical_analysis import HistoricalAnalysisResult
 from retireplan.core.strategy import project_qcd_depletion_progress
+from retireplan.core.timeline_builder import milestone_date_for_age
 from retireplan.output_formatting import round_output_value
 from retireplan.scenario import RetirementScenario
 
@@ -48,6 +49,7 @@ def build_reporting_bundle(
             "rows": len(result.ledger),
             "historical_analysis_included": historical_analysis is not None,
         },
+        "output_contract": result.output_contract,
         "tables": tables,
         "charts": charts,
     }
@@ -222,9 +224,6 @@ def _qcd_depletion_table(
         "constrained",
     ]
     rows = []
-    qcd_age = int(scenario.strategy.charitable_giving.qcd.start_age // 1)
-    if qcd_age < float(scenario.strategy.charitable_giving.qcd.start_age):
-        qcd_age += 1
     for row in result.ledger:
         owner_progress = {
             progress.owner: progress
@@ -243,7 +242,21 @@ def _qcd_depletion_table(
         if not owner_progress:
             continue
         if all(
-            (row.husband_age if owner == "Husband" else row.wife_age) < qcd_age
+            (
+                row.year
+                < milestone_date_for_age(
+                    scenario.household.husband.birth_year,
+                    scenario.household.husband.birth_month,
+                    float(scenario.strategy.charitable_giving.qcd.start_age),
+                ).year
+                if owner == "Husband"
+                else row.year
+                < milestone_date_for_age(
+                    scenario.household.wife.birth_year,
+                    scenario.household.wife.birth_month,
+                    float(scenario.strategy.charitable_giving.qcd.start_age),
+                ).year
+            )
             for owner in owner_progress
         ):
             continue

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
 from retireplan.core.account_flow import (
     apply_account_returns,
@@ -11,14 +11,33 @@ from retireplan.core.account_flow import (
     liquid_resources_total,
     settle_net_cash_flow,
 )
-from retireplan.core.expenses import build_expenses
+from retireplan.core.expenses import build_expenses, spending_guardrail_floor_for_period
 from retireplan.core.income import build_income
 from retireplan.core.strategy import conversion_tax_impact, execute_strategy
 from retireplan.core.timeline_builder import build_timeline
 from retireplan.medicare import calculate_medicare_summary
 from retireplan.mortgage import build_mortgage_schedule
-from retireplan.scenario import AccountOwner, AccountType, RetirementScenario
+from retireplan.output_formatting import round_output_value
+from retireplan.scenario import (
+    AccountOwner,
+    AccountType,
+    RetirementScenario,
+    SpendingGuardrailTrigger,
+)
 from retireplan.tax import TaxSummary, calculate_tax_summary, senior_standard_deduction_count
+
+EXECUTION_ORDER: tuple[str, ...] = (
+    "build_timeline",
+    "apply_proration",
+    "compute_income",
+    "compute_expenses",
+    "apply_contributions",
+    "execute_strategy",
+    "compute_taxes",
+    "settle_surplus_deficit",
+    "apply_returns",
+    "write_ledger",
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +72,7 @@ class ProjectionResult:
     version: str
     warnings: list[str]
     summary: dict[str, float | int | None]
+    output_contract: dict[str, object]
     ledger: list[ProjectionRow]
     success: bool
     failure_year: int | None
@@ -64,6 +84,7 @@ class ProjectionResult:
 def project_scenario(
     scenario: RetirementScenario,
     scenario_warnings: Iterable[str] | None = None,
+    step_recorder: Callable[[str, int | None], None] | None = None,
 ) -> ProjectionResult:
     """Run a Stage 3 annual projection using the richer scenario file as input."""
 
@@ -78,8 +99,17 @@ def project_scenario(
     previous_irmaa_tier: int | None = None
     executed_rollovers: set[tuple[str, str]] = set()
 
-    for period in build_timeline(scenario):
+    timeline = build_timeline(scenario)
+    _record_execution_step(step_recorder, "build_timeline", None)
+
+    for period in timeline:
         year = period.year
+        _record_execution_step(step_recorder, "apply_proration", year)
+        _apply_proration(period)
+
+        _record_execution_step(step_recorder, "compute_income", year)
+        income = build_income(scenario, period)
+
         rollovers, rollover_alerts = _apply_retirement_account_rollovers(
             scenario,
             period.husband_retired,
@@ -87,17 +117,23 @@ def project_scenario(
             balances,
             executed_rollovers,
         )
-        income = build_income(scenario, period)
         mortgage_summary = mortgage_schedule.annual_summaries.get(year)
         lookback_year = year - scenario.medicare.irmaa.lookback_years
         lookback_tax = tax_history.get(lookback_year)
+
+        _record_execution_step(step_recorder, "compute_expenses", year)
         base_expenses = build_expenses(scenario, period, mortgage_summary)
+
         earned_income = {
             "husband": income["earned_income_husband"],
             "wife": income["earned_income_wife"],
         }
+
+        _record_execution_step(step_recorder, "apply_contributions", year)
         contributions = apply_contributions(scenario, period, balances, earned_income)
         balances_after_contributions = dict(balances)
+
+        _record_execution_step(step_recorder, "execute_strategy", year)
         strategy_execution = execute_strategy(
             scenario,
             period,
@@ -105,83 +141,36 @@ def project_scenario(
             period.filing_status,
             balances_after_contributions,
         )
-        current_year_magi: float | None = None
-        expenses = dict(base_expenses)
-        tax_summary = calculate_tax_summary(
-            scenario,
-            period.filing_status,
-            income,
-            strategy_execution.cash_withdrawals,
-            extra_ordinary_income=strategy_execution.conversion_ordinary_income,
-            senior_standard_deduction_count=senior_standard_deduction_count(
-                period.filing_status,
-                husband_age=period.husband_age,
-                wife_age=period.wife_age,
-                husband_alive=period.husband_alive,
-                wife_alive=period.wife_alive,
-            ),
-        )
-        withdrawals: dict[str, float] = dict(strategy_execution.cash_withdrawals)
-        surplus_allocations: dict[str, float] = {}
-        net_cash_flow = 0.0
-        failed = 0
-        medicare_summary = calculate_medicare_summary(
+
+        initial_medicare_summary = calculate_medicare_summary(
             scenario,
             period,
             lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
             lookback_filing_status=filing_status_history.get(lookback_year),
             previous_irmaa_tier=previous_irmaa_tier,
         )
-        for _ in range(4):
-            expenses = dict(base_expenses)
-            expenses.update(
-                {
-                    "medicare_part_b": medicare_summary.part_b_base + medicare_summary.irmaa_part_b,
-                    "medicare_part_d": medicare_summary.part_d_base + medicare_summary.irmaa_part_d,
-                }
-            )
-            if strategy_execution.taxable_giving > 0:
-                expenses["charitable_giving"] = strategy_execution.taxable_giving
-
-            total_income = sum(income.values())
-            total_expenses = sum(expenses.values())
-            (
-                tax_summary,
-                withdrawals,
-                surplus_allocations,
-                net_cash_flow,
-                failed,
-                balances,
-            ) = _settle_period_cash_flow(
-                scenario,
-                period,
-                period.filing_status,
-                income,
-                total_income,
-                total_expenses,
-                balances_after_contributions,
-                strategy_execution.cash_withdrawals,
-                sum(strategy_execution.cash_withdrawals.values()),
-                strategy_execution.conversion_ordinary_income,
-            )
-            next_current_year_magi = tax_summary.adjusted_gross_income
-            next_medicare_summary = calculate_medicare_summary(
-                scenario,
-                period,
-                lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
-                lookback_filing_status=filing_status_history.get(lookback_year),
-                current_year_magi=next_current_year_magi,
-                current_year_filing_status=period.filing_status,
-                previous_irmaa_tier=previous_irmaa_tier,
-            )
-            if (
-                next_current_year_magi == current_year_magi
-                and next_medicare_summary == medicare_summary
-            ):
-                medicare_summary = next_medicare_summary
-                break
-            current_year_magi = next_current_year_magi
-            medicare_summary = next_medicare_summary
+        (
+            expenses,
+            tax_summary,
+            medicare_summary,
+            withdrawals,
+            surplus_allocations,
+            net_cash_flow,
+            failed,
+            balances,
+        ) = _resolve_period_financials(
+            scenario,
+            period,
+            income,
+            base_expenses,
+            initial_medicare_summary,
+            lookback_tax,
+            filing_status_history.get(lookback_year),
+            previous_irmaa_tier,
+            balances_after_contributions,
+            strategy_execution,
+            step_recorder,
+        )
         if failed and failure_year is None:
             failure_year = year
 
@@ -189,6 +178,7 @@ def project_scenario(
         filing_status_history[year] = period.filing_status
         previous_irmaa_tier = medicare_summary.irmaa_tier
 
+        _record_execution_step(step_recorder, "apply_returns", year)
         apply_account_returns(scenario, period, balances)
 
         liquid_resources = liquid_resources_total(scenario, balances)
@@ -205,6 +195,7 @@ def project_scenario(
             )
         )
 
+        _record_execution_step(step_recorder, "write_ledger", year)
         ledger.append(
             ProjectionRow(
                 year=year,
@@ -237,6 +228,7 @@ def project_scenario(
         version=scenario.metadata.version,
         warnings=warnings,
         summary=_build_summary(scenario, ledger, failure_year),
+        output_contract=round_output_value(_build_output_contract(scenario, ledger, failure_year)),
         ledger=ledger,
         success=failure_year is None,
         failure_year=failure_year,
@@ -250,57 +242,224 @@ def _stage_limit_warnings(scenario: RetirementScenario) -> list[str]:
     return warnings
 
 
-def _settle_period_cash_flow(
+def _record_execution_step(
+    step_recorder: Callable[[str, int | None], None] | None,
+    step: str,
+    year: int | None,
+) -> None:
+    if step_recorder is not None:
+        step_recorder(step, year)
+
+
+def _apply_proration(period) -> None:
+    del period
+
+
+def _resolve_period_financials(
     scenario: RetirementScenario,
     period,
-    filing_status: str,
     income: dict[str, float],
-    total_income: float,
-    total_expenses: float,
-    starting_balances: dict[str, float],
-    base_withdrawals: dict[str, float],
-    base_cash_inflows: float,
-    extra_ordinary_income: float,
-) -> tuple[TaxSummary, dict[str, float], dict[str, float], float, int, dict[str, float]]:
-    withdrawals: dict[str, float] = dict(base_withdrawals)
-    surplus_allocations: dict[str, float] = {}
-    tax_summary = calculate_tax_summary(
+    base_expenses: dict[str, float],
+    initial_medicare_summary,
+    lookback_tax,
+    lookback_filing_status: str | None,
+    previous_irmaa_tier: int | None,
+    balances_after_contributions: dict[str, float],
+    strategy_execution,
+    step_recorder: Callable[[str, int | None], None] | None,
+) -> tuple[
+    dict[str, float],
+    TaxSummary,
+    object,
+    dict[str, float],
+    dict[str, float],
+    float,
+    int,
+    dict[str, float],
+]:
+    current_year_magi: float | None = None
+    mutable_base_expenses = dict(base_expenses)
+    expenses = dict(mutable_base_expenses)
+    tax_summary = _compute_period_tax_summary(
         scenario,
-        filing_status,
+        period,
+        income,
+        strategy_execution.cash_withdrawals,
+        strategy_execution.conversion_ordinary_income,
+    )
+    withdrawals: dict[str, float] = dict(strategy_execution.cash_withdrawals)
+    surplus_allocations: dict[str, float] = {}
+    net_cash_flow = 0.0
+    failed = 0
+    balances = dict(balances_after_contributions)
+    medicare_summary = initial_medicare_summary
+
+    for _ in range(6):
+        expenses = _build_period_expenses(
+            mutable_base_expenses, medicare_summary, strategy_execution
+        )
+        _record_execution_step(step_recorder, "compute_taxes", period.year)
+        (
+            tax_summary,
+            withdrawals,
+            surplus_allocations,
+            net_cash_flow,
+            failed,
+            balances,
+        ) = _settle_period_cash_flow(
+            scenario,
+            period,
+            period.filing_status,
+            income,
+            expenses,
+            balances_after_contributions,
+            strategy_execution.cash_withdrawals,
+            strategy_execution.conversion_ordinary_income,
+            step_recorder,
+        )
+        if failed and _apply_resource_pressure_guardrail(
+            scenario,
+            period,
+            mutable_base_expenses,
+            net_cash_flow,
+        ):
+            current_year_magi = None
+            continue
+        next_current_year_magi = tax_summary.adjusted_gross_income
+        next_medicare_summary = calculate_medicare_summary(
+            scenario,
+            period,
+            lookback_magi=None if lookback_tax is None else lookback_tax.adjusted_gross_income,
+            lookback_filing_status=lookback_filing_status,
+            current_year_magi=next_current_year_magi,
+            current_year_filing_status=period.filing_status,
+            previous_irmaa_tier=previous_irmaa_tier,
+        )
+        if (
+            next_current_year_magi == current_year_magi
+            and next_medicare_summary == medicare_summary
+        ):
+            medicare_summary = next_medicare_summary
+            break
+        current_year_magi = next_current_year_magi
+        medicare_summary = next_medicare_summary
+
+    return (
+        expenses,
+        tax_summary,
+        medicare_summary,
+        withdrawals,
+        surplus_allocations,
+        net_cash_flow,
+        failed,
+        balances,
+    )
+
+
+def _build_period_expenses(base_expenses: dict[str, float], medicare_summary, strategy_execution):
+    expenses = dict(base_expenses)
+    expenses.update(
+        {
+            "medicare_part_b": medicare_summary.part_b_base + medicare_summary.irmaa_part_b,
+            "medicare_part_d": medicare_summary.part_d_base + medicare_summary.irmaa_part_d,
+        }
+    )
+    if strategy_execution.taxable_giving > 0:
+        expenses["charitable_giving"] = strategy_execution.taxable_giving
+    return expenses
+
+
+def _apply_resource_pressure_guardrail(
+    scenario: RetirementScenario,
+    period,
+    base_expenses: dict[str, float],
+    settled_net_cash_flow: float,
+) -> bool:
+    if not scenario.spending_guardrails.enabled:
+        return False
+    if scenario.spending_guardrails.trigger.type != SpendingGuardrailTrigger.RESOURCE_PRESSURE:
+        return False
+
+    reduction_needed = round(max(-settled_net_cash_flow, 0.0), 2)
+    if reduction_needed <= 0:
+        return False
+
+    current_base_living = round(base_expenses.get("base_living", 0.0), 2)
+    floor_amount = spending_guardrail_floor_for_period(scenario, period)
+    if current_base_living <= floor_amount:
+        return False
+
+    next_base_living = max(floor_amount, round(current_base_living - reduction_needed, 2))
+    if next_base_living >= current_base_living:
+        return False
+
+    base_expenses["base_living"] = next_base_living
+    return True
+
+
+def _compute_period_tax_summary(
+    scenario: RetirementScenario,
+    period,
+    income: dict[str, float],
+    withdrawals: dict[str, float],
+    extra_ordinary_income: float,
+) -> TaxSummary:
+    return calculate_tax_summary(
+        scenario,
+        period.filing_status,
         income,
         withdrawals,
         extra_ordinary_income=extra_ordinary_income,
         senior_standard_deduction_count=senior_standard_deduction_count(
-            filing_status,
+            period.filing_status,
             husband_age=period.husband_age,
             wife_age=period.wife_age,
             husband_alive=period.husband_alive,
             wife_alive=period.wife_alive,
         ),
     )
+
+
+def _settle_period_cash_flow(
+    scenario: RetirementScenario,
+    period,
+    filing_status: str,
+    income: dict[str, float],
+    expenses: dict[str, float],
+    starting_balances: dict[str, float],
+    base_withdrawals: dict[str, float],
+    extra_ordinary_income: float,
+    step_recorder: Callable[[str, int | None], None] | None,
+) -> tuple[TaxSummary, dict[str, float], dict[str, float], float, int, dict[str, float]]:
+    withdrawals: dict[str, float] = dict(base_withdrawals)
+    surplus_allocations: dict[str, float] = {}
+    tax_summary = _compute_period_tax_summary(
+        scenario,
+        period,
+        income,
+        withdrawals,
+        extra_ordinary_income,
+    )
     final_balances = dict(starting_balances)
     settled_net_cash_flow = 0.0
     failed = 0
+    total_income = sum(income.values())
+    total_expenses = sum(expenses.values())
+    base_cash_inflows = sum(base_withdrawals.values())
 
     for _ in range(6):
-        tax_summary = calculate_tax_summary(
+        tax_summary = _compute_period_tax_summary(
             scenario,
-            filing_status,
+            period,
             income,
             withdrawals,
-            extra_ordinary_income=extra_ordinary_income,
-            senior_standard_deduction_count=senior_standard_deduction_count(
-                filing_status,
-                husband_age=period.husband_age,
-                wife_age=period.wife_age,
-                husband_alive=period.husband_alive,
-                wife_alive=period.wife_alive,
-            ),
+            extra_ordinary_income,
         )
         cash_flow_before_settlement = (
             total_income + base_cash_inflows - total_expenses - tax_summary.total_tax
         )
         trial_balances = dict(starting_balances)
+        _record_execution_step(step_recorder, "settle_surplus_deficit", period.year)
         (
             extra_withdrawals,
             next_surplus_allocations,
@@ -482,4 +641,52 @@ def _build_summary(
         "total_given": round(total_given, 2),
         "traditional_balance_at_husband_age_70": round(traditional_balance_at_70, 2),
         "failure_year_if_any": failure_year,
+    }
+
+
+def _build_output_contract(
+    scenario: RetirementScenario,
+    ledger: list[ProjectionRow],
+    failure_year: int | None,
+) -> dict[str, object]:
+    summary = _build_summary(scenario, ledger, failure_year)
+
+    yearly_ledger = [row.__dict__ for row in ledger]
+    account_balances_by_year = [
+        {"year": row.year, "account_balances": row.account_balances_end} for row in ledger
+    ]
+    taxes_by_year = [{"year": row.year, "taxes": row.taxes} for row in ledger]
+    conversion_totals_by_year = [
+        {
+            "year": row.year,
+            "roth_conversion_total": row.strategy.get("roth_conversion_total", 0.0),
+            "conversion_tax_impact": row.strategy.get("conversion_tax_impact", 0.0),
+            "conversion_tax_payment": row.strategy.get("conversion_tax_payment", 0.0),
+            "conversion_tax_shortfall": row.strategy.get("conversion_tax_shortfall", 0.0),
+        }
+        for row in ledger
+    ]
+    rmd_qcd_giving_by_year = [
+        {
+            "year": row.year,
+            "rmd_total": row.strategy.get("rmd_total", 0.0),
+            "qcd_total": row.strategy.get("qcd_total", 0.0),
+            "taxable_rmd_total": row.strategy.get("taxable_rmd_total", 0.0),
+            "charitable_giving_total": row.strategy.get("charitable_giving_total", 0.0),
+            "taxable_giving": row.strategy.get("taxable_giving", 0.0),
+        }
+        for row in ledger
+    ]
+
+    return {
+        "yearly_ledger": yearly_ledger,
+        "account_balances_by_year": account_balances_by_year,
+        "taxes_by_year": taxes_by_year,
+        "conversion_totals_by_year": conversion_totals_by_year,
+        "rmd_qcd_giving_by_year": rmd_qcd_giving_by_year,
+        "failure_year": failure_year,
+        "net_worth": summary["terminal_net_worth"],
+        "total_taxes": summary["total_taxes_paid"],
+        "total_conversions": summary["total_roth_converted"],
+        "ira_balance_at_70": summary["traditional_balance_at_husband_age_70"],
     }

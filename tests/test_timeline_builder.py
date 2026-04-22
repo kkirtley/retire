@@ -1,4 +1,5 @@
 from retireplan.core import TimelineEvent, build_timeline
+from retireplan.core.timeline_builder import milestone_date_for_age
 
 
 def test_timeline_builder_creates_prorated_first_year_and_events(golden_loaded):
@@ -24,5 +25,25 @@ def test_timeline_builder_marks_retirement_and_medicare_milestones(golden_loaded
     assert by_year[2033].has_event(TimelineEvent.HOUSEHOLD_RETIREMENT_TRANSITION)
     assert by_year[2032].has_event(TimelineEvent.HUSBAND_MEDICARE_AGE)
     assert by_year[2032].has_event(TimelineEvent.WIFE_MEDICARE_AGE)
+    assert by_year[2032].has_event(TimelineEvent.WIFE_SOCIAL_SECURITY_CLAIM_YEAR)
+    assert by_year[2037].has_event(TimelineEvent.HUSBAND_SOCIAL_SECURITY_CLAIM_YEAR)
     assert by_year[2033].husband_retired is True
     assert by_year[2033].wife_retired is True
+
+
+def test_timeline_builder_uses_birth_month_for_milestone_dates(golden_loaded):
+    scenario = golden_loaded.scenario
+
+    husband_medicare = milestone_date_for_age(
+        scenario.household.husband.birth_year,
+        scenario.household.husband.birth_month,
+        float(scenario.medicare.start_age),
+    )
+    wife_social_security = milestone_date_for_age(
+        scenario.household.wife.birth_year,
+        scenario.household.wife.birth_month,
+        scenario.income.social_security.wife.claim_age,
+    )
+
+    assert husband_medicare.isoformat() == "2032-07-01"
+    assert wife_social_security.isoformat() == "2032-02-01"

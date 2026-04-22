@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from retireplan.core.timeline_builder import TimelinePeriod
+from retireplan.core.timeline_builder import TimelinePeriod, fraction_after_age_milestone
 from retireplan.scenario import IRMAATier, RetirementScenario
 
 
@@ -15,7 +15,7 @@ class MedicareSummary:
     irmaa_part_b: float
     irmaa_part_d: float
     total: float
-    covered_people: int
+    covered_people: float
     irmaa_tier: int
     lookback_year: int | None
     alerts: tuple[str, ...]
@@ -42,14 +42,14 @@ def calculate_medicare_summary(
     previous_irmaa_tier: int | None = None,
 ) -> MedicareSummary:
     covered_people = _covered_people(scenario, period)
-    if covered_people == 0:
+    if covered_people <= 0:
         return MedicareSummary(
             part_b_base=0.0,
             part_d_base=0.0,
             irmaa_part_b=0.0,
             irmaa_part_d=0.0,
             total=0.0,
-            covered_people=0,
+            covered_people=0.0,
             irmaa_tier=0,
             lookback_year=None,
             alerts=(),
@@ -81,7 +81,7 @@ def calculate_medicare_summary(
         irmaa_part_b=round(irmaa_part_b, 2),
         irmaa_part_d=round(irmaa_part_d, 2),
         total=round(total, 2),
-        covered_people=covered_people,
+        covered_people=round(covered_people, 4),
         irmaa_tier=tier_index,
         lookback_year=determination_year,
         alerts=tuple(alerts),
@@ -149,13 +149,25 @@ def _is_irmaa_reconsideration_active(
     return False
 
 
-def _covered_people(scenario: RetirementScenario, period: TimelinePeriod) -> int:
+def _covered_people(scenario: RetirementScenario, period: TimelinePeriod) -> float:
     start_age = scenario.medicare.start_age
-    count = 0
-    if period.husband_alive and period.husband_age >= start_age:
-        count += 1
-    if period.wife_alive and period.wife_age >= start_age:
-        count += 1
+    count = 0.0
+    if period.husband_alive:
+        count += fraction_after_age_milestone(
+            period,
+            scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
+            float(start_age),
+            scenario,
+        )
+    if period.wife_alive:
+        count += fraction_after_age_milestone(
+            period,
+            scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
+            float(start_age),
+            scenario,
+        )
     return count
 
 

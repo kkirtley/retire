@@ -1,0 +1,83 @@
+metadata:
+  scenario_name: "Historical Analysis Comparison"
+  version: "1.0.0"
+  description: "Scenario delta that enables historical analysis as a secondary
+    comparison layer while inheriting the canonical deterministic baseline"
+  created: "2026-04-20"
+  currency: "USD"
+  cadence: "annual"
+
+overrides:
+  historical_analysis:
+    enabled: true
+    dataset: "damodaran_us_annual_1970_2025"
+    success_rate_target: 0.90
+    use_historical_inflation_for_expenses: true
+    use_historical_inflation_for_income_cola: true
+    weighting:
+      method: "modern_heavier"
+      modern_start_year: 1990
+      modern_weight_multiplier: 3.0
+    account_type_return_policies:
+      traditional_ira:
+        glide_path:
+          - start_age: 0
+            end_age: 64
+            allocation: { stocks: 0.65, bonds: 0.35, cash: 0.00 }
+          - start_age: 65
+            end_age: 69
+            allocation: { stocks: 0.60, bonds: 0.40, cash: 0.00 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 0.70, bonds: 0.00, cash: 0.30 }
+      traditional_401k:
+        glide_path:
+          - start_age: 0
+            end_age: 64
+            allocation: { stocks: 0.65, bonds: 0.35, cash: 0.00 }
+          - start_age: 65
+            end_age: 69
+            allocation: { stocks: 0.60, bonds: 0.40, cash: 0.00 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 0.70, bonds: 0.00, cash: 0.30 }
+      roth_ira:
+        glide_path:
+          - start_age: 0
+            end_age: 69
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+      roth_401k:
+        glide_path:
+          - start_age: 0
+            end_age: 69
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+      hsa:
+        glide_path:
+          - start_age: 0
+            end_age: 69
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 1.00, bonds: 0.00, cash: 0.00 }
+      taxable:
+        glide_path:
+          - start_age: 0
+            end_age: 64
+            allocation: { stocks: 0.30, bonds: 0.25, cash: 0.45 }
+          - start_age: 65
+            end_age: 69
+            allocation: { stocks: 0.40, bonds: 0.00, cash: 0.60 }
+          - start_age: 70
+            end_age: 120
+            allocation: { stocks: 0.60, bonds: 0.00, cash: 0.40 }
+      restricted_cash:
+        glide_path:
+          - start_age: 0
+            end_age: 120
+            allocation: { stocks: 0.00, bonds: 0.00, cash: 1.00 }

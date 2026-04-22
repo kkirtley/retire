@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import date
 
 from retireplan.core.market_history import compound_growth_factor
-from retireplan.core.timeline_builder import TimelinePeriod, year_fraction_for_dates
+from retireplan.core.timeline_builder import (
+    TimelinePeriod,
+    milestone_date_for_age,
+    year_fraction_for_dates,
+)
 from retireplan.scenario import EarnedIncomePerson, RetirementScenario
 
 
@@ -30,8 +34,9 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
             scenario.income.social_security.husband.amount_monthly_at_claim,
             scenario.income.social_security.husband.cola_rate,
             scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
             scenario.income.social_security.husband.claim_age,
-            period.year,
+            period,
             scenario,
         )
 
@@ -41,21 +46,21 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
             scenario.income.social_security.wife.amount_monthly_at_claim,
             scenario.income.social_security.wife.cola_rate,
             scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
             scenario.income.social_security.wife.claim_age,
-            period.year,
+            period,
             scenario,
         )
-        own_wife_ss *= period.fraction_of_year
         if period.survivor_phase and scenario.income.social_security.survivor_rule.enabled:
             survivor_benefit = social_security_for_year(
                 scenario.income.social_security.husband.amount_monthly_at_claim,
                 scenario.income.social_security.husband.cola_rate,
                 scenario.household.husband.birth_year,
+                scenario.household.husband.birth_month,
                 scenario.income.social_security.husband.claim_age,
-                period.year,
+                period,
                 scenario,
             )
-            survivor_benefit *= period.fraction_of_year
             wife_ss = max(own_wife_ss, survivor_benefit)
         else:
             wife_ss = own_wife_ss
@@ -65,7 +70,7 @@ def build_income(scenario: RetirementScenario, period: TimelinePeriod) -> dict[s
         "earned_income_wife": earned_income["wife"],
         "va_disability": va_disability_for_period(scenario, period),
         "va_survivor_benefit": va_survivor_for_period(scenario, period),
-        "social_security_husband": round(husband_ss * period.fraction_of_year, 2),
+        "social_security_husband": round(husband_ss, 2),
         "social_security_wife": round(wife_ss, 2),
         "pension_income": pension_for_period(scenario, period),
     }
@@ -98,21 +103,23 @@ def social_security_for_year(
     monthly_amount_at_claim: float,
     cola_rate: float,
     birth_year: int,
+    birth_month: int,
     claim_age: float,
-    year: int,
+    period: TimelinePeriod,
     scenario: RetirementScenario,
 ) -> float:
-    claim_year = birth_year + int(claim_age)
-    if year < claim_year:
+    claim_start_date = milestone_date_for_age(birth_year, birth_month, claim_age)
+    if period.period_end < claim_start_date:
         return 0.0
     growth_factor = compound_growth_factor(
         scenario,
-        claim_year,
-        year,
+        claim_start_date.year,
+        period.year,
         cola_rate,
         use_historical_inflation=scenario.historical_analysis.use_historical_inflation_for_income_cola,
     )
-    return round(monthly_amount_at_claim * 12 * growth_factor, 2)
+    active_fraction = year_fraction_for_dates(period, claim_start_date, None, scenario)
+    return round(monthly_amount_at_claim * 12 * growth_factor * active_fraction, 2)
 
 
 def va_disability_for_period(scenario: RetirementScenario, period: TimelinePeriod) -> float:

@@ -54,10 +54,10 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     assert "bridge_withdrawal_for_conversion_taxes" in snapshot.cashflow_table.columns
     assert "bridge_withdrawal_for_operations" in snapshot.cashflow_table.columns
     age_sixty_six_cashflow = next(row for row in snapshot.cashflow_table.rows if row[0] == 2033)
-    assert age_sixty_six_cashflow[9] == 17065
+    assert age_sixty_six_cashflow[9] == 23053
     assert age_sixty_six_cashflow[10] == 28784
-    assert age_sixty_six_cashflow[11] == 17065
-    assert age_sixty_six_cashflow[12] == 45849
+    assert age_sixty_six_cashflow[11] == 0
+    assert age_sixty_six_cashflow[12] == 28784
     assert snapshot.activity_table.columns[0] == "year"
     assert snapshot.activity_table.columns[1] == "husband/wife ages"
     assert snapshot.activity_table.columns[4] == "qcd_distribution_total"
@@ -86,7 +86,7 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     first_mortgage_row = snapshot.mortgage_table.rows[0]
     assert first_mortgage_row[0] == 2026
     assert first_mortgage_row[1] == "59 / 59"
-    assert first_mortgage_row[2] == 3528
+    assert first_mortgage_row[2] == 1899
     assert first_mortgage_row[3] == "2032-11"
     assert first_mortgage_row[4] == 3529
     assert first_mortgage_row[5] == 1260
@@ -121,7 +121,7 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     first_planner_row = snapshot.roth_planner_table.rows[0]
     assert first_planner_row[0] == 2033
     assert first_planner_row[1] == "66 / 66"
-    assert first_planner_row[4] == "18.0%"
+    assert first_planner_row[4] == "21.7%"
     assert first_planner_row[7] == 0.0
     assert first_planner_row[8] == 5026
     assert "current-year MAGI via work_stoppage reconsideration" in first_planner_row[9]
@@ -194,7 +194,7 @@ def test_stage_9_window_exposes_required_tabs(golden_loaded: ScenarioLoadResult)
     assert axis_x.tickInterval() == 5.0
     assert axis_y.titleText() == "Amount ($K)"
     assert axis_y.labelFormat() == "$%.0fK"
-    assert window.mortgage_table.item(0, 2).text() == "3,528"
+    assert window.mortgage_table.item(0, 2).text() == "1,899"
 
     window.close()
 

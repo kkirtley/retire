@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil
 
 from retireplan.core.market_history import (
     account_type_return_for_period,
     fixed_account_return_for_year,
 )
-from retireplan.core.timeline_builder import TimelinePeriod
+from retireplan.core.timeline_builder import TimelinePeriod, milestone_date_for_age
 from retireplan.medicare.premiums import should_override_irmaa_conversion_guardrails
 from retireplan.scenario import Account, AccountOwner, AccountType, RetirementScenario
 from retireplan.tax import TaxSummary, calculate_tax_summary, senior_standard_deduction_count
@@ -243,9 +242,8 @@ def _apply_qcd(
     if not scenario.strategy.charitable_giving.enabled or not qcd.enabled:
         return 0.0, {}, ()
 
-    qcd_age = ceil(float(qcd.start_age))
     depletion_enabled = qcd.depletion_target.enabled
-    depletion_targets = _qcd_depletion_targets(scenario, period, balances, qcd_age)
+    depletion_targets = _qcd_depletion_targets(scenario, period, balances)
     owner_floor_targets = _owner_qcd_floor_targets(qcd, depletion_targets, balances, scenario)
     depletion_goal_total = round(sum(owner_floor_targets.values()), 2)
     remaining_limit = round(max(float(qcd.annual_limit) - depletion_goal_total, 0.0), 2)
@@ -257,11 +255,22 @@ def _apply_qcd(
     total_qcd = 0.0
     qcd_distributions: dict[str, float] = {}
     alerts: list[str] = []
-    for owner, age, alive in (
-        (AccountOwner.HUSBAND, period.husband_age, period.husband_alive),
-        (AccountOwner.WIFE, period.wife_age, period.wife_alive),
+    for owner, birth_year, birth_month, alive in (
+        (
+            AccountOwner.HUSBAND,
+            scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
+            period.husband_alive,
+        ),
+        (
+            AccountOwner.WIFE,
+            scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
+            period.wife_alive,
+        ),
     ):
-        if not alive or age < qcd_age:
+        qcd_start_date = milestone_date_for_age(birth_year, birth_month, float(qcd.start_age))
+        if not alive or period.period_end < qcd_start_date:
             continue
         applicable_accounts = _qcd_applicable_accounts(scenario, owner)
         owner_available = round(
@@ -398,18 +407,36 @@ def _qcd_depletion_targets(
     scenario: RetirementScenario,
     period: TimelinePeriod,
     balances: dict[str, float],
-    qcd_age: int,
 ) -> dict[str, float]:
     config = scenario.strategy.charitable_giving.qcd.depletion_target
     if not config.enabled:
         return {}
 
     targets: dict[str, float] = {}
-    for owner, age, alive in (
-        (AccountOwner.HUSBAND, period.husband_age, period.husband_alive),
-        (AccountOwner.WIFE, period.wife_age, period.wife_alive),
+    for owner, age, birth_year, birth_month, alive in (
+        (
+            AccountOwner.HUSBAND,
+            period.husband_age,
+            scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
+            period.husband_alive,
+        ),
+        (
+            AccountOwner.WIFE,
+            period.wife_age,
+            scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
+            period.wife_alive,
+        ),
     ):
-        if owner not in config.owners or not alive or age < qcd_age:
+        if owner not in config.owners or not alive:
+            continue
+        qcd_start_date = milestone_date_for_age(
+            birth_year,
+            birth_month,
+            float(scenario.strategy.charitable_giving.qcd.start_age),
+        )
+        if period.period_end < qcd_start_date:
             continue
         applicable_accounts = [
             account
@@ -515,14 +542,28 @@ def project_qcd_depletion_progress(
     if not qcd.enabled or not qcd.depletion_target.enabled:
         return ()
 
-    qcd_age = ceil(float(qcd.start_age))
     constrained = any("QCD depletion target fell short" in alert for alert in alerts)
     owner_rows: list[QCDDepletionOwnerProgress] = []
-    for owner, age, alive in (
-        (AccountOwner.HUSBAND, husband_age, husband_alive),
-        (AccountOwner.WIFE, wife_age, wife_alive),
+    for owner, age, birth_year, birth_month, alive in (
+        (
+            AccountOwner.HUSBAND,
+            husband_age,
+            scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
+            husband_alive,
+        ),
+        (
+            AccountOwner.WIFE,
+            wife_age,
+            scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
+            wife_alive,
+        ),
     ):
         if owner not in qcd.depletion_target.owners:
+            continue
+
+        if year < milestone_date_for_age(birth_year, birth_month, float(qcd.start_age)).year:
             continue
 
         applicable_accounts = _qcd_applicable_accounts(scenario, owner)
@@ -557,11 +598,7 @@ def project_qcd_depletion_progress(
         periods_remaining = max(owner_target_age - age, 0)
         annual_qcd_required = 0.0
         projected_balance = current_balance
-        if (
-            age >= qcd_age
-            and periods_remaining > 0
-            and current_balance > qcd.depletion_target.target_balance
-        ):
+        if periods_remaining > 0 and current_balance > qcd.depletion_target.target_balance:
             expected_return = _weighted_expected_return(
                 scenario,
                 year,

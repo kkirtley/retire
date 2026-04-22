@@ -1,226 +1,332 @@
-You are an expert Python engineer building a LOCAL-FIRST desktop retirement planning application for a specific household. You MUST follow these instructions exactly. Deliver working code in small increments with tests. Do not invent requirements or silently change assumptions.
+# Deterministic Annual Engine Stabilization Work Package
 
-PRIMARY GOAL
-Build a deterministic (non-Monte-Carlo in v1) retirement projection engine and desktop UI that models a veteran household with VA income, Social Security, Medicare premiums + IRMAA, mortgage amortization + early payoff, taxes (federal bracket-based + Missouri effective rate), account-level balances (Roth/Traditional/HSA), Roth conversions, RMDs, death/survivor transitions, and scenario overrides. Success criterion: “never run out of resources before age 100.”
+## Objective
 
-NON-FUNCTIONAL REQUIREMENTS
-- Local-first: runs fully offline for calculations. No external account integrations.
-- Network calls: ONLY allowed for developer tooling (e.g., dependency install) and optional future updates; NOT allowed for pulling user financial data. App must function without network.
-- Logging: do not log PII. Use generic labels “Husband” and “Wife” only. No names, SSNs, account numbers.
-- Testing: pytest from day one. Build calculation core with deterministic golden tests.
-- Packaging: runnable from source; also support packaging to Windows via PyInstaller.
-- Code quality: type hints, black/ruff, clear module boundaries, docstrings for formulas.
-- Deterministic v1: no Monte Carlo. Design extension points for Monte Carlo later.
+Stabilize the project around the **deterministic annual retirement planning engine** as the canonical execution path.
 
-TARGET PLATFORM
-- Python 3.12+
-- Desktop UI: PySide6 (Qt). However: DO NOT start UI until core engine + tests are complete.
+This work package is focused on:
+- correctness
+- consistency
+- testability
 
-HIGH-LEVEL BUILD STAGES (MUST FOLLOW)
-Stage 0: Repo scaffolding and CI-ready tooling
-Stage 1: Data model + YAML scenario loader + validation
-Stage 2: Deterministic projection engine (annual) with tests
-Stage 3: Taxes: federal bracket-based + Missouri effective rate with tests
-Stage 4: Mortgage amortization + payoff-by-age-65 rule + property tax/insurance expense lines
-Stage 5: Social Security + VA + survivor transitions + COLA rules
-Stage 6: Medicare premiums + IRMAA thresholds + tests
-Stage 7: Withdrawal strategy + Roth conversions + RMDs + tests
-Stage 8: Reporting outputs (tables + charts export) from engine (no GUI yet)
-Stage 9: Build PySide6 UI on top of stable engine; store scenarios in YAML v1 and add SQLite persistence v2
+NOT new features.
 
-DATA INPUTS AND STORAGE
-- v1 scenarios stored as YAML files in /scenarios.
-- Scenario versioning: automatically include semantic versions in YAML metadata (e.g., baseline_v1.0.0). Provide a CLI helper to bump versions.
-- Later (v2): store scenarios and runs in SQLite; keep YAML import/export.
+---
 
-CORE OUTPUTS REQUIRED (v1)
-1) Year-by-year ledger from current year through age 100 for both spouses:
-   - Ages, filing status, alive flags
-   - All income sources (VA, SS, earned income if any)
-   - Medicare premiums and medical OOP
-   - Taxes (federal + MO)
-   - Expenses (base + travel + property tax + insurance + other)
-   - Mortgage payments/interest/principal + remaining balance
-   - Roth conversions and taxes attributable
-   - RMDs and taxable distributions
-   - Net cash flow surplus/deficit
-   - Account balances end-of-year by account
-2) Success flag per year; “failure year” if any account resources exhausted.
-3) Charts (engine-level):
-   - Total liquid net worth over time
-   - Income vs expenses over time
-   - Taxes over time
-   - Account balances stacked area
+## Scope Rules
 
-IMPORTANT HOUSEHOLD BASELINE ASSUMPTIONS (DEFAULT SCENARIO)
-Use these as default YAML baseline values (editable):
-- Ages today: Husband 58, Wife 58
-- Retirement ages: Husband 67, Wife 67 (independent retirement ages supported)
-- Model horizon: through age 100 for Wife; Husband death modeled explicitly as scenario input
-- Success definition: never run out of liquid resources before Wife age 100
+### In Scope
+- Scenario file separation
+- Loader behavior and merge semantics
+- Strict validation mode
+- Execution order enforcement
+- Age/date handling for annual modeling
+- Bridge account behavior
+- Mortgage payoff logic
+- Deterministic output contract
+- Regression tests
 
-INCOME
-VA Disability (Husband):
-- Monthly: $4,158.00 (non-taxable)
-- COLA: 2.50% annually (apply at start of each year for simplicity)
-- Stops at Husband death year (no VA after death)
-- Survivor benefit to Wife: begins only if Husband death occurs after February 2035.
-  Implement as an input income stream “VA_Survivor” with configurable start condition:
-  - if death_date >= 2035-02-01, enable survivor VA benefit; else $0.
-  Amount: parameterized in YAML (default placeholder $0.00 unless provided later).
-  (Do not guess the benefit amount.)
+### Out of Scope
+- UI redesign
+- Monte Carlo
+- External integrations
+- New planning features
+- Broad refactoring of package layout
 
-Social Security (both claim at 67 by default):
-- Husband SS at 67: $3,700.00/month (YAML input, allow override)
-- Wife SS at 67: $1,500.00/month (YAML input, allow override)
-- SS COLA: use a configurable long-run average default 2.00% annually (YAML input)
-- Survivor rule: upon Husband death, Wife benefit steps up to the higher of her own or Husband’s (standard survivor logic). Model this explicitly.
+---
 
-EARNED INCOME
-- Default: none post-retirement.
-- Pre-retirement earnings may be added later; structure supports earned income schedules.
+## Mandatory Implementation Principles
 
-ACCOUNTS (START BALANCES; editable)
-- Roth IRA (Husband): $300,000.00
-- Traditional IRA (Husband): $373,000.00
-- HSA (Household): $9,000.00 (assume investable)
-- Wife Traditional IRA: $20,000.00
-- Wife Roth 401k: $760.00
-- Add placeholders for additional accounts; design accounts as list objects.
+- Do not invent new YAML fields
+- Do not rename existing YAML fields without migration
+- Do not bypass validation
+- Do not duplicate logic in UI
+- Do not use Car Fund for retirement flows
+- Do not treat experimental fields as baseline
+- Deterministic annual engine is the default
+- Tests must pass before proceeding
 
-INVESTMENT RETURNS (Deterministic)
-- Default annual return for all accounts: 5.00% nominal (YAML input, per-account override allowed).
-- Inflation baseline: 2.50% (YAML input).
-- Apply returns end-of-year to average balance or end balance consistently; document your convention and keep it consistent in tests.
+---
 
-EXPENSES
-- Base living expenses: $10,000.00/month in today’s dollars (annualize to $120,000.00)
-- Travel: $5,000.00/year
-- Inflate expenses by CPI (default 2.50%) annually.
-- Property tax and homeowners insurance are separate expense lines (see mortgage section).
+# Tasks
 
-MORTGAGE + HOME COSTS
-- Mortgage balance: $450,000.00
-- Interest rate: 5.50% fixed
-- Term remaining: 15 years
-- HARD REQUIREMENT: mortgage must be paid off by Husband age 65 (even though retire at 67).
-  Implement an “extra principal payment” solver that computes required extra annual payment (or additional monthly equivalent aggregated annually) to achieve payoff by target age.
-- Property tax: YAML input (default placeholder $0.00 unless provided later)
-- Homeowners insurance: YAML input (default placeholder $0.00 unless provided later)
+## Task 1 — Scenario Separation
 
-TAXES
-Federal:
-- Bracket-based approximation for MFJ and Single.
-- Use a configurable bracket table in YAML (do not hardcode a single tax year).
-- Include standard deduction (configurable).
-- Taxable income includes: SS taxable portion approximation, Traditional distributions, Roth conversions, RMDs, interest/dividends if later modeled.
-- VA is non-taxable and must not enter taxable income.
-Missouri:
-- Use an effective flat rate input (e.g., 4.00% default placeholder) applied to MO taxable income proxy.
-- Make this explicit and configurable; don’t attempt perfect MO law modeling in v1.
+### Goal
+Separate baseline, test fixtures, and scenarios.
 
-MEDICARE + IRMAA
-- Medicare starts at age 65 for each spouse.
-- Model Part B + Part D base premiums as YAML inputs (default current-year placeholders; do not fetch from web).
-- Model IRMAA using configurable thresholds and premium surcharges (YAML tables).
-- IRMAA is based on MAGI from two years prior; implement the 2-year lookback rule.
-- Include flags/warnings when IRMAA tier changes due to Roth conversions and other income.
+### Create
+- `scenarios/baseline_canonical.yaml`
+- `scenarios/test_baseline_minimal.yaml`
+- `scenarios/scenario_*.yaml`
 
-RMDs
-- Implement RMDs starting at a configurable age (default 75, YAML input).
-- Use a configurable Uniform Lifetime Table factor table (YAML).
-- Apply RMDs to Traditional accounts only.
+### Requirements
+- Tests must NOT depend on baseline file
+- Add `scenarios/README.md`
 
-WITHDRAWAL ORDER + FUNDING LOGIC
-- Preferred withdrawal order is an input list in YAML. Implement default:
-  1) Taxable (if any)
-  2) Traditional (subject to taxes and RMD)
-  3) Roth
-  4) HSA (only for qualified medical expenses unless user chooses otherwise; in v1 treat HSA withdrawals as allowed for medical line items; keep it configurable)
-- If annual cashflow is negative, withdraw in order to cover deficit.
-- If annual cashflow positive, allocate surplus according to a contribution/savings policy (v1 can park surplus in a “cash” taxable bucket).
+### Acceptance Criteria
+- Baseline loads cleanly
+- Test fixture is stable
+- Tests pass independently of baseline
 
-ROTH CONVERSIONS (IN SCOPE v1)
-- Implement annual Roth conversion amounts as a schedule (YAML list by year or by age).
-- Conversions move money from Traditional to Roth and create taxable ordinary income.
-- Provide a helper mode: “convert up to top of bracket X” (YAML: max_marginal_bracket), using federal brackets.
-- Ensure conversions interact with IRMAA (MAGI) and SS taxation.
+---
 
-DEATH / SURVIVOR MODELING
-- Husband death modeled explicitly as a scenario input (year or exact date). Wife continues to age 100.
-- After husband death:
-  - Filing status becomes Single (starting the year after death unless user selects otherwise; make rule explicit).
-  - Expenses may drop by configurable percentage (YAML input, default 70%).
-  - VA stops; SS survivor step-up applies; VA survivor benefit conditional after Feb 2035 as described.
+## Task 2 — Deterministic Engine Mode
 
-SCENARIOS
-Provide at least:
-- baseline_v1.0.0.yaml
-- “high_inflation_3yrs” scenario override
-- “market_downturn_2yrs” deterministic stress scenario (negative return years)
+### Goal
+Make deterministic annual the default engine.
 
-CLI TOOLS (v1)
-- `retireplan validate scenarios/baseline.yaml`
-- `retireplan run scenarios/baseline.yaml --out results/baseline_run.json --charts results/`
-- `retireplan bump-version scenarios/baseline.yaml --patch` (or minor/major)
+### Requirements
+- Default execution mode: `deterministic_annual`
+- CLI `run` uses this mode
+- Historical analysis is optional, not primary
 
-TESTING REQUIREMENTS (MUST IMPLEMENT)
-- Unit tests for:
-  - YAML validation + defaults
-  - Mortgage amortization math and payoff-by-age-65 solver
-  - SS COLA compounding and survivor step-up
-  - VA COLA compounding + stop at death + survivor conditional trigger
-  - Federal tax bracket computations + standard deduction
-  - IRMAA lookback logic + tier transitions
-  - RMD calculation against factor table
-  - Roth conversion transfers and tax impact
-- Golden test:
-  - For baseline scenario, assert key outputs at select ages/years (e.g., balances at 67, 75, 100; taxes at 67; mortgage payoff year).
-- Use $ formatting only in presentation; internal floats/Decimal recommended. For deterministic finance math, prefer Decimal where feasible.
+### Acceptance Criteria
+- No ambiguity in execution path
+- Docs reflect deterministic-first design
 
-UI REQUIREMENTS (Stage 9+)
-- PySide6 desktop app
-- Tabs:
-  - Inputs (view/edit scenario)
-  - Results table
-  - Charts
-  - Roth conversion planner
-  - IRMAA warnings
-  - Scenario compare (baseline vs stress)
-- UI must call the engine as a library; no duplicated business logic.
-- v2 persistence: store scenarios and runs in SQLite; support YAML import/export.
+---
 
-DELIVERABLE STRUCTURE (EXPECTED REPO LAYOUT)
-- /retireplan/ (python package)
-  - /core/ (engine)
-  - /tax/
-  - /medicare/
-  - /mortgage/
-  - /io/ (yaml/json)
-  - /cli/
-  - /ui/ (added later)
-- /scenarios/
-- /tests/
-- pyproject.toml with dependencies + tooling
+## Task 3 — Merge Behavior
 
-IMPORTANT CONSTRAINTS
-- Do not implement Monte Carlo in v1.
-- Do not hardcode tax-year values; put tables in YAML with defaults.
-- Do not guess missing amounts (property tax, insurance, VA survivor amount). Use explicit placeholders and require YAML inputs.
-- Document every major formula and convention in code comments/docstrings.
+### Goal
+Align loader behavior with schema merge rules.
 
-FIRST TASK
-Implement Stage 0–2 only:
-1) Scaffold project with pyproject.toml, ruff, black, mypy (optional), pytest.
-2) Define YAML schema and loader with pydantic (preferred) or dataclasses + validation.
-3) Implement deterministic annual projection engine with:
-   - incomes (VA + SS only)
-   - expenses (base + travel)
-   - investment returns (simple)
-   - withdrawal order (Traditional then Roth for now)
-   - record ledger rows
-4) Write tests that pass.
+### Requirements
+- Deep merge objects
+- Replace lists (unless explicitly supported otherwise)
 
-After Stage 0–2 pass, proceed to Stage 3 (tax) and onward in order. Always keep the app runnable and tests green.
+### Tests
+- Object merge works
+- List replacement works
 
-If any requirement conflicts, STOP and surface the conflict rather than guessing.
+### Acceptance Criteria
+- Merge behavior matches documentation
+
+---
+
+## Task 4 — Strict Validation Mode
+
+### Goal
+Enable production-grade validation.
+
+### Add
+- CLI flag: `--strict-validation`
+
+### Fail on
+- Age/date inconsistencies
+- Invalid account references
+- Bad contribution timing
+- Death model inconsistencies
+- Unsupported fields
+
+### Acceptance Criteria
+- Strict mode fails hard
+- Non-strict mode allows warnings
+
+---
+
+## Task 5 — Execution Order Contract
+
+### Goal
+Prevent sequencing bugs.
+
+### Define Order
+1. Build timeline
+2. Apply proration
+3. Compute income
+4. Compute expenses
+5. Apply contributions
+6. Execute strategy
+7. Compute taxes
+8. Settle surplus/deficit
+9. Apply returns
+10. Write ledger
+
+### Requirements
+- Document in `docs/execution_order.md`
+- Align code with order
+- Add integration test
+
+---
+
+## Task 6 — Field Classification
+
+### Goal
+Separate core vs advanced features.
+
+### Categories
+- Core deterministic
+- Advanced supported
+- Experimental
+
+### Requirements
+- Remove experimental fields from baseline
+- Keep them in scenario variants
+
+---
+
+## Task 7 — Account Integrity
+
+### Goal
+Eliminate reference errors.
+
+### Validate
+- All accounts exist
+- All destinations valid
+- Bridge account present if used
+- QCD requires IRA account
+- Restricted accounts never used
+
+### Acceptance Criteria
+- Invalid configs fail validation
+
+---
+
+## Task 8 — Age/Date Semantics
+
+### Goal
+Remove ambiguity in age handling.
+
+### Requirements
+- Age derived from DOB + date
+- `current_age` is informational only
+
+### Tests
+- SS claim timing
+- Medicare start
+- QCD start
+- Proration correctness
+
+---
+
+## Task 9 — Bridge Account Behavior
+
+### Goal
+Make bridge usage deterministic.
+
+### Rules
+
+**Before age 70**
+- Primary: conversion taxes
+- Secondary: living expenses (only if needed)
+
+**After age 70**
+- Growth and liquidity account
+
+### Tests
+- Tax-first usage
+- Controlled fallback usage
+- Post-70 behavior change
+
+---
+
+## Task 10 — Mortgage Logic
+
+### Goal
+Make payoff deterministic.
+
+### Requirements
+- Compute payment if null
+- Compute extra principal for payoff target
+- Handle proration
+
+### Tests
+- Standard amortization
+- Target payoff logic
+
+---
+
+## Task 11 — Output Contract
+
+### Required Outputs
+- Yearly ledger
+- Account balances
+- Taxes
+- Conversion totals
+- RMD/QCD/giving
+- Failure year
+- Net worth
+- Total taxes
+- Total conversions
+- IRA balance at 70
+
+### Acceptance Criteria
+- Always produced
+- Verified in tests
+
+---
+
+## Task 12 — Regression Suite
+
+### Goal
+Prevent silent breakage.
+
+### Tests
+- Baseline runs
+- Retirement transition
+- Proration correctness
+- SS timing
+- Conversion tax sourcing
+- Bridge usage rules
+- Car Fund unused
+- Spending guardrails
+- Survivor logic
+- QCD behavior
+
+---
+
+# Implementation Order
+
+1. Task 1 — Scenario separation  
+2. Task 3 — Merge behavior  
+3. Task 4 — Strict validation  
+4. Task 5 — Execution order  
+5. Task 8 — Age/date semantics  
+6. Task 7 — Account integrity  
+7. Task 9 — Bridge behavior  
+8. Task 10 — Mortgage logic  
+9. Task 11 — Output contract  
+10. Task 12 — Regression suite  
+11. Task 6 — Field classification  
+12. Task 2 — Engine mode cleanup  
+
+---
+
+# Development Rules
+
+## Do
+- Keep changes small
+- Update tests continuously
+- Prefer explicit logic
+- Preserve deterministic assumptions
+
+## Do Not
+- Add Monte Carlo
+- Redesign UI
+- Add new features
+- Refactor structure broadly
+- Invent YAML fields
+- Hide errors behind warnings
+
+---
+
+# Deliverables
+
+- Clean canonical baseline YAML
+- Stable test scenario YAML
+- Deterministic engine as default
+- Strict validation mode
+- Execution order documentation
+- Hardened bridge and mortgage logic
+- Regression test suite
+
+---
+
+# Final Instruction
+
+Favor **deterministic correctness over flexibility**.
+
+If forced to choose:
+- choose correctness
+- reject ambiguity

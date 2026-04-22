@@ -7,8 +7,9 @@ import yaml
 
 from retireplan.io import load_scenario
 
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
-TEST_SCENARIO_PATH = FIXTURES_DIR / "golden_baseline_v1.0.1.yaml"
+TEST_SCENARIO_PATH = (
+    Path(__file__).resolve().parent.parent / "scenarios" / "test_baseline_minimal.yaml"
+)
 
 
 @pytest.fixture

@@ -1,0 +1,28 @@
+metadata:
+  scenario_name: "High Inflation Stress"
+  version: "1.0.0"
+  description: "Scenario delta that raises household inflation assumptions while
+    inheriting the canonical deterministic baseline"
+  created: "2026-04-20"
+  currency: "USD"
+  cadence: "annual"
+
+overrides:
+  assumptions:
+    inflation_rate: 0.04
+    investment_return_default: 0.045
+
+  expenses:
+    base_living:
+      inflation_rate: 0.04
+    travel:
+      inflation_rate: 0.04
+    housing:
+      property_tax:
+        inflation_rate: 0.03
+      homeowners_insurance:
+        inflation_rate: 0.03
+
+  spending_guardrails:
+    base_spending_annual: 76000.00
+    floor_spending_annual: 63000.00

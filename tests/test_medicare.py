@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 from retireplan.core import build_timeline, project_scenario
+from retireplan.core.timeline_builder import fraction_after_age_milestone
 from retireplan.medicare import calculate_medicare_summary
 
 
@@ -15,9 +16,30 @@ def test_medicare_base_premiums_begin_at_age_sixty_five(golden_scenario):
         lookback_filing_status=None,
     )
 
-    assert summary.covered_people == 2
-    assert summary.part_b_base == 4192.8
-    assert summary.part_d_base == 832.8
+    expected_covered_people = fraction_after_age_milestone(
+        period,
+        scenario.household.husband.birth_year,
+        scenario.household.husband.birth_month,
+        float(scenario.medicare.start_age),
+        scenario,
+    ) + fraction_after_age_milestone(
+        period,
+        scenario.household.wife.birth_year,
+        scenario.household.wife.birth_month,
+        float(scenario.medicare.start_age),
+        scenario,
+    )
+
+    assert summary.covered_people == round(expected_covered_people, 4)
+    assert summary.covered_people < 2
+    assert summary.part_b_base == round(
+        scenario.medicare.part_b.base_premium_monthly * 12 * expected_covered_people,
+        2,
+    )
+    assert summary.part_d_base == round(
+        scenario.medicare.part_d.base_premium_monthly * 12 * expected_covered_people,
+        2,
+    )
     assert summary.irmaa_tier == 0
 
 
@@ -76,7 +98,7 @@ def test_projection_adds_medicare_costs_and_irmaa_alerts(golden_scenario):
     irmaa_reset_year = rows[2036]
 
     assert pre_medicare.medicare["total"] == 0.0
-    assert medicare_start.medicare["covered_people"] == 2.0
+    assert 0.0 < medicare_start.medicare["covered_people"] < 2.0
     assert medicare_start.expenses["medicare_part_b"] > 0.0
     assert medicare_start.expenses["medicare_part_d"] > 0.0
     assert "IRMAA tier changed from 0 to 2 based on 2030 MAGI." in medicare_start.alerts

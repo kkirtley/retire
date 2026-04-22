@@ -49,8 +49,19 @@ def build_mortgage_schedule(scenario: RetirementScenario) -> MortgageSchedule:
     balance = float(scenario.mortgage.starting_balance)
     monthly_rate = float(scenario.mortgage.interest_rate) / 12.0
     remaining_term_months = scenario.mortgage.remaining_term_years * 12
-    target_term_months = _target_term_months(scenario, remaining_term_months)
-    payment_monthly = _payment_monthly(scenario, balance, monthly_rate, target_term_months)
+    scheduled_payment_monthly = _scheduled_payment_monthly(
+        scenario,
+        balance,
+        monthly_rate,
+        remaining_term_months,
+    )
+    extra_payment_monthly = _extra_payment_monthly(
+        scenario,
+        balance,
+        monthly_rate,
+        remaining_term_months,
+        scheduled_payment_monthly,
+    )
 
     annual_totals: dict[int, dict[str, float]] = {}
     payment_month = scenario.simulation.start_date.replace(day=1)
@@ -61,8 +72,12 @@ def build_mortgage_schedule(scenario: RetirementScenario) -> MortgageSchedule:
             break
 
         interest = round(balance * monthly_rate, 10)
-        total_payment = min(payment_monthly, balance + interest)
-        principal = total_payment - interest
+        scheduled_payment = min(scheduled_payment_monthly, balance + interest)
+        scheduled_principal = max(scheduled_payment - interest, 0.0)
+        remaining_balance = max(balance - scheduled_principal, 0.0)
+        extra_principal = min(extra_payment_monthly, remaining_balance)
+        principal = scheduled_principal + extra_principal
+        total_payment = scheduled_payment + extra_principal
         ending_balance = max(balance - principal, 0.0)
 
         year_totals = annual_totals.setdefault(
@@ -76,8 +91,8 @@ def build_mortgage_schedule(scenario: RetirementScenario) -> MortgageSchedule:
                 "ending_balance": 0.0,
             },
         )
-        year_totals["scheduled_payment"] += total_payment
-        year_totals["extra_principal"] += 0.0
+        year_totals["scheduled_payment"] += scheduled_payment
+        year_totals["extra_principal"] += extra_principal
         year_totals["total_payment"] += total_payment
         year_totals["interest"] += interest
         year_totals["principal"] += principal
@@ -102,24 +117,41 @@ def build_mortgage_schedule(scenario: RetirementScenario) -> MortgageSchedule:
     }
 
     return MortgageSchedule(
-        payment_monthly=round(payment_monthly, 2),
-        extra_payment_monthly=0.0,
+        payment_monthly=round(scheduled_payment_monthly, 2),
+        extra_payment_monthly=round(extra_payment_monthly, 2),
         payoff_date=payoff_date,
         annual_summaries=annual_summaries,
     )
 
 
+def _scheduled_payment_monthly(
+    scenario: RetirementScenario,
+    balance: float,
+    monthly_rate: float,
+    remaining_term_months: int,
+) -> float:
+    if scenario.mortgage.scheduled_payment_monthly is not None:
+        return float(scenario.mortgage.scheduled_payment_monthly)
+    return _solve_total_payment_monthly(balance, monthly_rate, remaining_term_months)
+
+
+def _extra_payment_monthly(
+    scenario: RetirementScenario,
+    balance: float,
+    monthly_rate: float,
+    remaining_term_months: int,
+    scheduled_payment_monthly: float,
+) -> float:
+    if not scenario.mortgage.payoff_by_age.enabled:
+        return 0.0
+
+    target_term_months = _target_term_months(scenario, remaining_term_months)
+    target_total_payment = _solve_total_payment_monthly(balance, monthly_rate, target_term_months)
+    return max(target_total_payment - scheduled_payment_monthly, 0.0)
+
+
 def _target_term_months(scenario: RetirementScenario, remaining_term_months: int) -> int:
-    configured_target_date = (
-        scenario.mortgage.payoff_by_age.target_date
-        if scenario.mortgage.payoff_by_age.enabled
-        else None
-    )
-    target_date = (
-        configured_target_date.replace(day=1)
-        if configured_target_date is not None
-        else scenario.simulation.retirement_date.replace(day=1)
-    )
+    target_date = _target_payoff_month(scenario)
     start_date = scenario.simulation.start_date.replace(day=1)
     months_until_target = (target_date.year - start_date.year) * 12 + (
         target_date.month - start_date.month
@@ -127,15 +159,22 @@ def _target_term_months(scenario: RetirementScenario, remaining_term_months: int
     return max(1, min(remaining_term_months, months_until_target))
 
 
-def _payment_monthly(
-    scenario: RetirementScenario,
-    balance: float,
-    monthly_rate: float,
-    target_term_months: int,
-) -> float:
-    if scenario.mortgage.scheduled_payment_monthly is not None:
-        return float(scenario.mortgage.scheduled_payment_monthly)
-    return _solve_total_payment_monthly(balance, monthly_rate, target_term_months)
+def _target_payoff_month(scenario: RetirementScenario) -> date:
+    if not scenario.mortgage.payoff_by_age.enabled:
+        return scenario.simulation.retirement_date.replace(day=1)
+
+    configured_target_date = scenario.mortgage.payoff_by_age.target_date
+    if configured_target_date is not None:
+        return configured_target_date.replace(day=1)
+
+    target_age = scenario.mortgage.payoff_by_age.target_age
+    if target_age is None:
+        return scenario.simulation.retirement_date.replace(day=1)
+
+    husband = scenario.household.husband
+    target_year = husband.birth_year + target_age
+    target_month = husband.birth_month
+    return date(target_year, target_month, 1)
 
 
 def _solve_total_payment_monthly(

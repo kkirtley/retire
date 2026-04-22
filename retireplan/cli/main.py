@@ -13,16 +13,28 @@ from retireplan.output_formatting import round_output_value
 from retireplan.reporting import build_reporting_bundle, write_reporting_bundle
 
 app = typer.Typer(help="Retirement planning tool for veteran households.")
+DEFAULT_EXECUTION_MODE = "deterministic_annual"
 SCENARIO_ARGUMENT = typer.Argument(..., help="Path to YAML scenario file")
 OUTPUT_OPTION = typer.Option(Path("results/run.json"), help="Output file path")
 CHARTS_OPTION = typer.Option(Path("results/"), help="Charts output directory")
 COMPARE_OPTION = typer.Option(None, help="Optional comparison scenario path")
+STRICT_VALIDATION_OPTION = typer.Option(
+    False,
+    "--strict-validation",
+    help="Force strict validation failures for loader diagnostics that are warnings in non-strict mode.",
+)
 
 
 @app.command()
-def validate(scenario_path: Path = SCENARIO_ARGUMENT):
+def validate(
+    scenario_path: Path = SCENARIO_ARGUMENT,
+    strict_validation: bool = STRICT_VALIDATION_OPTION,
+):
     """Validate a scenario file."""
-    loaded = load_scenario(scenario_path)
+    loaded = load_scenario(
+        scenario_path,
+        strict_validation=True if strict_validation else None,
+    )
     typer.echo(
         f"Scenario valid: {loaded.scenario.metadata.scenario_name} v{loaded.scenario.metadata.version}"
     )
@@ -39,11 +51,17 @@ def run(
     scenario_path: Path = SCENARIO_ARGUMENT,
     out: Path = OUTPUT_OPTION,
     charts: Path = CHARTS_OPTION,
+    strict_validation: bool = STRICT_VALIDATION_OPTION,
 ):
     """Run a retirement projection."""
-    loaded = load_scenario(scenario_path)
+    loaded = load_scenario(
+        scenario_path,
+        strict_validation=True if strict_validation else None,
+    )
     result = project_scenario(loaded.scenario, loaded.warnings)
-    historical_analysis = analyze_historical_cohorts(loaded.scenario, loaded.warnings)
+    historical_analysis = None
+    if loaded.scenario.historical_analysis.enabled:
+        historical_analysis = analyze_historical_cohorts(loaded.scenario, loaded.warnings)
     reporting = build_reporting_bundle(result, loaded.scenario, historical_analysis)
 
     out = out.expanduser()
@@ -52,6 +70,7 @@ def run(
     report_exports = write_reporting_bundle(reporting, charts)
 
     payload = {
+        "execution_mode": DEFAULT_EXECUTION_MODE,
         "scenario": {
             "name": result.scenario_name,
             "version": result.version,
@@ -59,6 +78,7 @@ def run(
         },
         "warnings": result.warnings,
         "summary": result.summary,
+        "output_contract": result.output_contract,
         "success": result.success,
         "failure_year": result.failure_year,
         "reporting": reporting,
@@ -71,6 +91,7 @@ def run(
     out.write_text(json.dumps(round_output_value(payload), indent=2), encoding="utf-8")
 
     typer.echo(f"Projection complete: {result.scenario_name} v{result.version}")
+    typer.echo(f"Execution mode: {DEFAULT_EXECUTION_MODE}")
     typer.echo(f"Success: {result.success}")
     if historical_analysis is not None:
         typer.echo(

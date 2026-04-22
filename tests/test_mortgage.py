@@ -8,13 +8,15 @@ def test_mortgage_schedule_builds_annual_summaries_with_extra_principal(golden_s
 
     schedule = build_mortgage_schedule(scenario)
 
-    assert schedule.payment_monthly == 3527.79
-    assert schedule.extra_payment_monthly == 0.0
+    assert schedule.payment_monthly == 1898.68
+    assert schedule.extra_payment_monthly == 1629.11
     assert schedule.payoff_date is not None
     assert schedule.payoff_date.year == 2032
     assert schedule.payoff_date.month == 11
 
     first_year = schedule.annual_summaries[2026]
+    assert first_year.scheduled_payment == 11392.07
+    assert first_year.extra_principal == 9774.69
     assert first_year.total_payment == round(
         first_year.scheduled_payment + first_year.extra_principal,
         2,
@@ -56,10 +58,11 @@ def test_mortgage_schedule_solves_monthly_payment_to_retirement_horizon_when_uns
 
     schedule = build_mortgage_schedule(scenario)
 
-    assert schedule.payment_monthly == 3490.7
+    assert schedule.payment_monthly == 1898.68
+    assert schedule.extra_payment_monthly == 0.0
     assert schedule.payoff_date is not None
-    assert schedule.payoff_date.year == 2032
-    assert schedule.payoff_date.month == 12
+    assert schedule.payoff_date.year == 2041
+    assert schedule.payoff_date.month == 6
 
 
 def test_mortgage_schedule_prefers_specific_target_date_over_retirement_date(golden_scenario):
@@ -69,7 +72,22 @@ def test_mortgage_schedule_prefers_specific_target_date_over_retirement_date(gol
 
     schedule = build_mortgage_schedule(scenario)
 
-    assert schedule.payment_monthly == 4063.02
+    assert schedule.payment_monthly == 1898.68
+    assert schedule.extra_payment_monthly == 2164.35
     assert schedule.payoff_date is not None
     assert schedule.payoff_date.year == 2031
     assert schedule.payoff_date.month == 11
+
+
+def test_mortgage_schedule_can_derive_payoff_target_from_husband_age(golden_scenario):
+    scenario = golden_scenario
+    scenario.mortgage.scheduled_payment_monthly = None
+    scenario.mortgage.payoff_by_age.target_date = None
+
+    schedule = build_mortgage_schedule(scenario)
+
+    assert schedule.payment_monthly == 1898.68
+    assert schedule.extra_payment_monthly == 1830.22
+    assert schedule.payoff_date is not None
+    assert schedule.payoff_date.year == 2032
+    assert schedule.payoff_date.month == 6

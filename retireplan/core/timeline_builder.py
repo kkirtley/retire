@@ -58,8 +58,16 @@ def build_timeline(scenario: RetirementScenario) -> list[TimelinePeriod]:
             else date(year, 1, 1)
         )
         period_end = date(year, 12, 31)
-        husband_age = year - scenario.household.husband.birth_year
-        wife_age = year - scenario.household.wife.birth_year
+        husband_age = attained_age_on(
+            scenario.household.husband.birth_year,
+            scenario.household.husband.birth_month,
+            period_end,
+        )
+        wife_age = attained_age_on(
+            scenario.household.wife.birth_year,
+            scenario.household.wife.birth_month,
+            period_end,
+        )
         husband_alive = _is_alive(scenario.household.husband.modeled_death.death_year, year)
         wife_alive = _is_alive(scenario.household.wife.modeled_death.death_year, year)
         survivor_phase = _survivor_phase(scenario, year)
@@ -84,7 +92,15 @@ def build_timeline(scenario: RetirementScenario) -> list[TimelinePeriod]:
                 ),
                 survivor_phase=survivor_phase,
                 filing_status=_filing_status_for_year(scenario, year),
-                events=_build_period_events(scenario, year, husband_age, wife_age, survivor_phase),
+                events=_build_period_events(
+                    scenario,
+                    year,
+                    period_start,
+                    period_end,
+                    husband_age,
+                    wife_age,
+                    survivor_phase,
+                ),
             )
         )
 
@@ -171,6 +187,8 @@ def _filing_status_for_year(scenario: RetirementScenario, year: int) -> str:
 def _build_period_events(
     scenario: RetirementScenario,
     year: int,
+    period_start: date,
+    period_end: date,
     husband_age: int,
     wife_age: int,
     survivor_phase: bool,
@@ -182,11 +200,23 @@ def _build_period_events(
             TimelineEvent.HOUSEHOLD_RETIREMENT_TRANSITION,
         ),
         (
-            husband_age == scenario.household.husband.retirement_age,
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
+                scenario.household.husband.birth_year,
+                scenario.household.husband.birth_month,
+                float(scenario.household.husband.retirement_age),
+            ),
             TimelineEvent.HUSBAND_REACHES_RETIREMENT_AGE,
         ),
         (
-            wife_age == scenario.household.wife.retirement_age,
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
+                scenario.household.wife.birth_year,
+                scenario.household.wife.birth_month,
+                float(scenario.household.wife.retirement_age),
+            ),
             TimelineEvent.WIFE_REACHES_RETIREMENT_AGE,
         ),
         (
@@ -202,27 +232,80 @@ def _build_period_events(
             TimelineEvent.WIFE_PENSION_STARTS,
         ),
         (
-            year
-            == _social_security_claim_year(
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
                 scenario.household.husband.birth_year,
+                scenario.household.husband.birth_month,
                 scenario.income.social_security.husband.claim_age,
             ),
             TimelineEvent.HUSBAND_SOCIAL_SECURITY_CLAIM_YEAR,
         ),
         (
-            year
-            == _social_security_claim_year(
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
                 scenario.household.wife.birth_year,
+                scenario.household.wife.birth_month,
                 scenario.income.social_security.wife.claim_age,
             ),
             TimelineEvent.WIFE_SOCIAL_SECURITY_CLAIM_YEAR,
         ),
-        (husband_age == 65, TimelineEvent.HUSBAND_MEDICARE_AGE),
-        (wife_age == 65, TimelineEvent.WIFE_MEDICARE_AGE),
+        (
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
+                scenario.household.husband.birth_year,
+                scenario.household.husband.birth_month,
+                float(scenario.medicare.start_age),
+            ),
+            TimelineEvent.HUSBAND_MEDICARE_AGE,
+        ),
+        (
+            milestone_occurs_within_period(
+                period_start,
+                period_end,
+                scenario.household.wife.birth_year,
+                scenario.household.wife.birth_month,
+                float(scenario.medicare.start_age),
+            ),
+            TimelineEvent.WIFE_MEDICARE_AGE,
+        ),
         (survivor_phase, TimelineEvent.SURVIVOR_PHASE),
     )
     return tuple(event for condition, event in event_conditions if condition)
 
 
-def _social_security_claim_year(birth_year: int, claim_age: float) -> int:
-    return birth_year + int(claim_age)
+def milestone_date_for_age(birth_year: int, birth_month: int, age: float) -> date:
+    months_after_birth = int(round(age * 12))
+    year_offset, zero_based_month = divmod((birth_month - 1) + months_after_birth, 12)
+    return date(birth_year + year_offset, zero_based_month + 1, 1)
+
+
+def attained_age_on(birth_year: int, birth_month: int, on_date: date) -> int:
+    age = on_date.year - birth_year
+    if (on_date.month, on_date.day) < (birth_month, 1):
+        age -= 1
+    return age
+
+
+def milestone_occurs_within_period(
+    period_start: date,
+    period_end: date,
+    birth_year: int,
+    birth_month: int,
+    age: float,
+) -> bool:
+    milestone_date = milestone_date_for_age(birth_year, birth_month, age)
+    return period_start <= milestone_date <= period_end
+
+
+def fraction_after_age_milestone(
+    period: TimelinePeriod,
+    birth_year: int,
+    birth_month: int,
+    age: float,
+    scenario: RetirementScenario,
+) -> float:
+    milestone_date = milestone_date_for_age(birth_year, birth_month, age)
+    return year_fraction_for_dates(period, milestone_date, None, scenario)

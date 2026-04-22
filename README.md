@@ -157,11 +157,14 @@ pre-commit run --all-files
 
 The current implementation uses the schema in `retireplan/schema/retirement.py` as the authoritative model and exposes it through the package for validation and projection work.
 
+The default execution path is `deterministic_annual`. Historical analysis is an optional secondary comparison layer and is not part of the primary engine mode.
+
 Implemented now:
 - Schema-backed YAML loading and validation
 - CLI `validate` and `run` commands wired to the loader
 - Non-fatal scenario diagnostics for version/file mismatches and stale age data
 - Annual projection with taxes, mortgage cashflow, Medicare and IRMAA costs, survivor transitions, and yearly ledger output
+- Deterministic resource-pressure spending guardrails that can ratchet base living expenses down toward a configured floor before a year is marked failed
 - Stage 7 withdrawal strategy support including Roth conversions, RMDs, QCDs, charitable-giving coordination, and top-level projection summaries
 - Stage 8 reporting exports including chart-ready series and CSV/JSON output artifacts from the CLI
 - Stage 9 PySide6 desktop UI with YAML-first scenario editing, results tabs, charts, Roth conversion planning, IRMAA review, and scenario comparison
@@ -178,26 +181,28 @@ strategy:
 
 When enabled, the engine rolls each retired owner's 401k balances into the first same-owner IRA of the matching tax type at retirement. The original 401k buckets remain in the ledger with zero balances so historical contributions and pre-retirement reporting still reconcile.
 
-See `STAGE_TRACKER.md` for the persistent build-stage status.
+See `STAGE_TRACKER.md` for the persistent deterministic stabilization status.
 
 ## CLI Commands
 
 ### Validate Scenario
 
 ```bash
-retireplan validate scenarios/baseline_v1.0.1.yaml
+retireplan validate scenarios/baseline_canonical.yaml
 ```
 
 ### Run Projection
 
 ```bash
-retireplan run scenarios/baseline_v1.0.1.yaml --out results/baseline_run.json --charts results/
+retireplan run scenarios/baseline_canonical.yaml --out results/baseline_run.json --charts results/
 ```
+
+The `run` command always executes the `deterministic_annual` engine mode. If a scenario enables `historical_analysis`, the CLI appends that analysis as a secondary report section after the deterministic projection completes.
 
 ### Launch Desktop UI
 
 ```bash
-retireplan ui scenarios/baseline_v1.0.1.yaml --compare scenarios/baseline_v1.0.1.yaml
+retireplan ui scenarios/baseline_canonical.yaml --compare scenarios/scenario_high_inflation.yaml
 ```
 
 This writes the main projection payload to `--out` and reporting artifacts to `--charts`, including:
@@ -285,7 +290,7 @@ Near-term work already folded into the direction of the app:
 - Stage 8: reporting outputs, export-ready tables, and chart data
 - Stage 9: PySide6 desktop UI, scenario editing, and later SQLite persistence
 
-See `STAGE_TRACKER.md` for the live status and completion notes for each stage.
+See `STAGE_TRACKER.md` for the live stabilization-task status and completion notes.
 
 ## License
 

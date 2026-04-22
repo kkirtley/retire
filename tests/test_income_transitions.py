@@ -1,6 +1,7 @@
 from copy import deepcopy
 
-from retireplan.core import project_scenario
+from retireplan.core import build_timeline, project_scenario
+from retireplan.core.timeline_builder import milestone_date_for_age, year_fraction_for_dates
 
 
 def test_survivor_transition_applies_single_status_expense_stepdown_and_ss_step_up(golden_scenario):
@@ -49,3 +50,35 @@ def test_va_survivor_benefit_does_not_start_when_death_precedes_eligibility_rule
     assert survivor.income["va_survivor_benefit"] == 0.0
     assert survivor.income["social_security_husband"] == 0.0
     assert survivor.income["social_security_wife"] > 0.0
+
+
+def test_social_security_claims_start_in_birthday_month_with_proration(golden_scenario):
+    scenario = deepcopy(golden_scenario)
+
+    result = project_scenario(scenario)
+    rows = {row.year: row for row in result.ledger}
+    periods = {period.year: period for period in build_timeline(scenario)}
+
+    wife_claim_date = milestone_date_for_age(
+        scenario.household.wife.birth_year,
+        scenario.household.wife.birth_month,
+        scenario.income.social_security.wife.claim_age,
+    )
+    husband_claim_date = milestone_date_for_age(
+        scenario.household.husband.birth_year,
+        scenario.household.husband.birth_month,
+        scenario.income.social_security.husband.claim_age,
+    )
+    wife_claim_fraction = year_fraction_for_dates(periods[2032], wife_claim_date, None, scenario)
+    husband_claim_fraction = year_fraction_for_dates(
+        periods[2037], husband_claim_date, None, scenario
+    )
+
+    assert rows[2031].income["social_security_wife"] == 0.0
+    assert rows[2032].income["social_security_wife"] == round(1500.0 * 12 * wife_claim_fraction, 2)
+    assert rows[2032].income["social_security_wife"] < 1500.0 * 12
+    assert rows[2036].income["social_security_husband"] == 0.0
+    assert rows[2037].income["social_security_husband"] == round(
+        5002.0 * 12 * husband_claim_fraction, 2
+    )
+    assert rows[2037].income["social_security_husband"] < 5002.0 * 12

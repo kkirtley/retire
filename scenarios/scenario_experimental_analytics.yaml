@@ -1,0 +1,29 @@
+metadata:
+  scenario_name: "Experimental Analytics Opt-In"
+  version: "1.0.0"
+  description: "Scenario delta that opts into experimental analytics tracking
+    while inheriting the canonical deterministic baseline"
+  created: "2026-04-21"
+  currency: "USD"
+  cadence: "annual"
+
+overrides:
+  strategy:
+    analytics:
+      conversion_efficiency:
+        enabled: true
+        track:
+          - "taxes_paid_on_conversions"
+          - "estimated_future_tax_saved"
+          - "effective_conversion_rate"
+      rmd_projection:
+        enabled: true
+        track:
+          - "projected_rmds_by_year"
+          - "rmd_reduction_from_conversions"
+      charitable_tracking:
+        enabled: true
+        track:
+          - "total_given"
+          - "qcd_amounts"
+          - "taxable_giving"

@@ -136,3 +136,20 @@ def mortgage_payment_for_period(
     if mortgage_summary is not None:
         return round(mortgage_summary.total_payment, 2)
     return 0.0
+
+
+def spending_guardrail_floor_for_period(
+    scenario: RetirementScenario,
+    period: TimelinePeriod,
+) -> float:
+    floor_amount = inflated_amount_for_period(
+        scenario.spending_guardrails.floor_spending_annual,
+        scenario.expenses.base_living.inflation_rate,
+        scenario.simulation.start_date.year,
+        period,
+        scenario,
+    )
+    if period.survivor_phase and scenario.household.expense_stepdown_after_husband_death.enabled:
+        ratio = scenario.household.expense_stepdown_after_husband_death.surviving_expense_ratio
+        floor_amount *= ratio
+    return round(floor_amount, 2)
