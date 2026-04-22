@@ -5,9 +5,13 @@ import yaml
 
 from retireplan.io import load_scenario, load_scenario_text
 
+COMMITTED_TEST_BASELINE = next(
+    Path(__file__).resolve().parents[1].glob("scenarios/test_baseline_minimal.yaml")
+)
 
-def test_load_baseline_scenario_and_collect_warnings(golden_loaded):
-    loaded = golden_loaded
+
+def test_loader_directly_loads_committed_test_baseline_fixture():
+    loaded = load_scenario(COMMITTED_TEST_BASELINE)
 
     assert loaded.scenario.metadata.version == "1.0.1"
     assert loaded.scenario.household.husband.label == "Husband"
@@ -117,12 +121,20 @@ def test_repo_experimental_analytics_scenario_overrides_canonical_baseline(golde
 def test_scenarios_root_contains_only_active_files(golden_scenario_path):
     scenarios_dir = golden_scenario_path.parent
     root_entries = {path.name for path in scenarios_dir.iterdir()}
+    approved_non_yaml_entries = {"README.md", "archive"}
+    approved_yaml_entries = {"baseline_canonical.yaml", "test_baseline_minimal.yaml"}
 
     assert "baseline_canonical.yaml" in root_entries
     assert "test_baseline_minimal.yaml" in root_entries
     assert "README.md" in root_entries
     assert "archive" in root_entries
     assert not any(name.startswith("baseline_v") for name in root_entries)
+    assert all(
+        name in approved_non_yaml_entries
+        or name in approved_yaml_entries
+        or (name.startswith("scenario_") and name.endswith(".yaml"))
+        for name in root_entries
+    )
 
 
 def test_scenario_archive_contains_legacy_baselines(golden_scenario_path):
@@ -1676,3 +1688,82 @@ def test_loader_strict_override_forces_failure_even_when_scenario_is_non_strict(
 
     with pytest.raises(ValueError, match="Strict validation failed"):
         load_scenario(temp_path, strict_validation=True)
+
+
+def test_loader_strict_validation_fails_on_stale_current_age(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["validation"]["strict"] = True
+    payload["household"]["husband"]["current_age"] = 99
+
+    temp_path = tmp_path / "strict-stale-current-age.yaml"
+    temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="household.husband.current_age=99"):
+        load_scenario(temp_path)
+
+
+def test_loader_strict_validation_fails_on_filename_version_mismatch(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["validation"]["strict"] = True
+
+    temp_path = tmp_path / "baseline_v9.9.9.yaml"
+    temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="filename version does not match"):
+        load_scenario(temp_path)
+
+
+def test_loader_strict_validation_fails_on_incomplete_modeled_death(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["validation"]["strict"] = True
+    payload["household"]["husband"]["modeled_death"] = {"enabled": True, "death_year": None}
+
+    temp_path = tmp_path / "strict-incomplete-modeled-death.yaml"
+    temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="modeled_death is enabled but death_year is null"):
+        load_scenario(temp_path)
+
+
+def test_loader_strict_validation_rejects_invalid_account_references(tmp_path, golden_payload):
+    payload = golden_payload
+    payload["validation"]["strict"] = True
+    payload["contributions"]["schedules"][0]["destination_account"] = "Missing Account"
+
+    temp_path = tmp_path / "strict-invalid-account-reference.yaml"
+    temp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="destination_account must refer to an existing account"):
+        load_scenario(temp_path, strict_validation=True)
+
+
+def test_loader_strict_validation_rejects_unsupported_scenario_delta_structure(
+    tmp_path, golden_scenario_path
+):
+    baseline_path = tmp_path / "baseline_canonical.yaml"
+    baseline_path.write_text(
+        golden_scenario_path.parent.joinpath("baseline_canonical.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    scenario_path = tmp_path / "scenario_invalid_delta.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(
+            {
+                "metadata": {
+                    "scenario_name": "Invalid Delta",
+                    "version": "1.0.0",
+                    "description": "Unsupported scenario structure",
+                    "created": "2026-04-21",
+                    "currency": "USD",
+                    "cadence": "annual",
+                },
+                "household": {"state_of_residence": "Missouri"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="may only define metadata and overrides"):
+        load_scenario(scenario_path, strict_validation=True)
