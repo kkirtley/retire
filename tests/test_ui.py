@@ -54,10 +54,10 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     assert "bridge_withdrawal_for_conversion_taxes" in snapshot.cashflow_table.columns
     assert "bridge_withdrawal_for_operations" in snapshot.cashflow_table.columns
     age_sixty_six_cashflow = next(row for row in snapshot.cashflow_table.rows if row[0] == 2033)
-    assert age_sixty_six_cashflow[9] == 23053
-    assert age_sixty_six_cashflow[10] == 28784
+    assert age_sixty_six_cashflow[9] == 23455
+    assert age_sixty_six_cashflow[10] == 27997
     assert age_sixty_six_cashflow[11] == 0
-    assert age_sixty_six_cashflow[12] == 28784
+    assert age_sixty_six_cashflow[12] == 27997
     assert snapshot.activity_table.columns[0] == "year"
     assert snapshot.activity_table.columns[1] == "husband/wife ages"
     assert snapshot.activity_table.columns[4] == "qcd_distribution_total"
@@ -121,9 +121,9 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     first_planner_row = snapshot.roth_planner_table.rows[0]
     assert first_planner_row[0] == 2033
     assert first_planner_row[1] == "66 / 66"
-    assert first_planner_row[4] == "21.7%"
+    assert first_planner_row[4] == "21.3%"
     assert first_planner_row[7] == 0.0
-    assert first_planner_row[8] == 5026
+    assert first_planner_row[8] == 5323
     assert "current-year MAGI via work_stoppage reconsideration" in first_planner_row[9]
     assert snapshot.irmaa_table.columns[0] == "year"
     assert len(snapshot.charts) == 4
@@ -131,7 +131,7 @@ def test_ui_snapshot_exposes_stage_9_views(golden_loaded: ScenarioLoadResult):
     assert all(chart.y_axis_step % 50000.0 == 0.0 for chart in snapshot.charts)
     assert snapshot.detail_years[0] == 2026
     assert '"year": 2026' in snapshot.detail_json_by_year[2026]
-    assert "12699" in snapshot.detail_json_by_year[2026]
+    assert "11912" in snapshot.detail_json_by_year[2026]
     assert '"qcd_distributions": {' in snapshot.detail_json_by_year[2042]
     assert '"rollovers": {' in snapshot.detail_json_by_year[2033]
     assert '"summary":' in snapshot.detail_summary_json

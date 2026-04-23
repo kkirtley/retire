@@ -69,10 +69,10 @@ def test_projection_executes_roth_conversions_in_active_years(golden_scenario):
     conversion_year = by_year[2033]
 
     assert conversion_year.strategy["roth_conversion_total"] == 160000.0
-    assert conversion_year.strategy["conversion_tax_impact"] == 34772.43
+    assert conversion_year.strategy["conversion_tax_impact"] == 34089.7
     assert conversion_year.account_balances_end["Husband Roth IRA"] == 657598.31
     assert conversion_year.account_balances_end["Wife Roth IRA"] == 60155.05
-    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 584716.06
+    assert conversion_year.account_balances_end["Husband Traditional IRA"] == 584294.6
     assert conversion_year.account_balances_end["Wife Traditional IRA"] == 0.0
 
 
@@ -88,12 +88,12 @@ def test_qcd_can_satisfy_rmd_before_taxable_distribution_when_conversions_disabl
     baseline_row = next(row for row in baseline.ledger if row.year == 2042)
     no_qcd_row = next(row for row in no_qcd.ledger if row.year == 2042)
 
-    assert baseline_row.strategy["rmd_total"] == 30732.98
-    assert baseline_row.strategy["qcd_total"] == 64343.45
+    assert baseline_row.strategy["rmd_total"] == 30683.68
+    assert baseline_row.strategy["qcd_total"] == 64232.18
     assert baseline_row.strategy["taxable_rmd_total"] == 2226.63
-    assert round(sum(baseline_row.qcd_distributions.values()), 2) == 64343.45
+    assert round(sum(baseline_row.qcd_distributions.values()), 2) == 64232.18
     assert no_qcd_row.strategy["qcd_total"] == 0.0
-    assert no_qcd_row.strategy["taxable_rmd_total"] == 42570.16
+    assert no_qcd_row.strategy["taxable_rmd_total"] == 42500.4
     assert no_qcd_row.qcd_distributions == {}
     assert no_qcd_row.withdrawals["Husband Traditional IRA"] > baseline_row.withdrawals.get(
         "Husband Traditional IRA", 0.0
@@ -113,8 +113,8 @@ def test_charitable_giving_can_spill_into_standard_cashflow_when_allowed(golden_
 
     assert row.strategy["qcd_total"] == 5000.0
     assert sum(row.qcd_distributions.values()) == 5000.0
-    assert row.strategy["charitable_giving_total"] == 39600.58
-    assert row.strategy["taxable_giving"] == 34600.58
+    assert row.strategy["charitable_giving_total"] == 39514.48
+    assert row.strategy["taxable_giving"] == 34514.48
     assert row.strategy["taxable_giving"] > 0.0
     assert row.strategy["charitable_giving_total"] > row.strategy["taxable_giving"]
     assert row.expenses["charitable_giving"] == row.strategy["taxable_giving"]
@@ -191,9 +191,9 @@ def test_conversion_tax_payment_uses_configured_source_order_before_general_with
     result = project_scenario(scenario)
     row = next(item for item in result.ledger if item.year == 2033)
 
-    assert row.strategy["conversion_tax_payment"] == 39183.82
+    assert row.strategy["conversion_tax_payment"] == 38396.82
     assert row.strategy["conversion_tax_shortfall"] == 0.0
-    assert row.withdrawals == {"Household Operating Cash": 39183.82}
+    assert row.withdrawals == {"Household Operating Cash": 38396.82}
 
 
 def test_conversion_tax_payment_shortfall_is_tracked_when_configured_sources_are_empty(
@@ -219,7 +219,7 @@ def test_conversion_tax_payment_shortfall_is_tracked_when_configured_sources_are
     row = next(item for item in result.ledger if item.year == 2033)
 
     assert row.strategy["conversion_tax_payment"] == 0.0
-    assert row.strategy["conversion_tax_shortfall"] == 39183.82
+    assert row.strategy["conversion_tax_shortfall"] == 38396.82
     assert row.withdrawals == {}
     assert any("Unable to pre-fund" in alert for alert in row.alerts)
 
@@ -245,9 +245,9 @@ def test_conversion_tax_payment_can_use_roth_assets_when_enabled(golden_scenario
     result = project_scenario(scenario)
     row = next(item for item in result.ledger if item.year == 2033)
 
-    assert row.strategy["conversion_tax_payment"] == 39183.82
+    assert row.strategy["conversion_tax_payment"] == 38396.82
     assert row.strategy["conversion_tax_shortfall"] == 0.0
-    assert row.withdrawals == {"Husband Roth IRA": 39183.82}
+    assert row.withdrawals == {"Husband Roth IRA": 38396.82}
     assert any("from Roth assets" in alert for alert in row.alerts)
 
 
@@ -273,7 +273,7 @@ def test_conversion_tax_payment_can_gross_up_from_traditional_distribution(golde
     row = next(item for item in result.ledger if item.year == 2033)
 
     assert row.strategy["conversion_tax_payment"] > 30067.61
-    assert row.strategy["conversion_tax_shortfall"] == 0.12
+    assert row.strategy["conversion_tax_shortfall"] == 0.1
     assert row.withdrawals == {"Husband Traditional IRA": row.strategy["conversion_tax_payment"]}
     assert any("Grossed up conversion-tax funding" in alert for alert in row.alerts)
 
@@ -303,7 +303,7 @@ def test_conversion_only_tax_method_skips_tax_on_tax_feedback(golden_scenario):
     incremental_row = next(item for item in incremental_result.ledger if item.year == 2033)
     conversion_only_row = next(item for item in conversion_only_result.ledger if item.year == 2033)
 
-    assert incremental_row.strategy["conversion_tax_shortfall"] == 0.12
+    assert incremental_row.strategy["conversion_tax_shortfall"] == 0.1
     assert conversion_only_row.strategy["conversion_tax_shortfall"] == 0.0
     assert (
         incremental_row.strategy["conversion_tax_payment"]
@@ -341,7 +341,7 @@ def test_retirement_irmaa_override_can_relax_conversion_guardrails(golden_scenar
     )
     with_override_row = next(item for item in with_override_result.ledger if item.year == 2033)
 
-    assert without_override_row.strategy["roth_conversion_total"] == 185996.87
+    assert without_override_row.strategy["roth_conversion_total"] == 191996.87
     assert with_override_row.strategy["roth_conversion_total"] == 200000.0
     assert any("Reduced Roth conversion" in alert for alert in without_override_row.alerts)
     assert not any("Reduced Roth conversion" in alert for alert in with_override_row.alerts)

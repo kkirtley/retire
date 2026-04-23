@@ -762,6 +762,10 @@ class MortgageConfig(StrictBaseModel):
 
 # ============================================================
 # Taxes / Federal / Medicare
+# Shared defaults for these schema blocks are intentionally pinned in
+# defaults/policy_defaults.yaml to current-year published policy values.
+# Scenario inputs stay value-driven rather than year-driven, so tests must lock
+# the concrete default numbers to avoid silent year drift.
 # ============================================================
 
 

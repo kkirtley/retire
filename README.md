@@ -217,6 +217,16 @@ retireplan run scenarios/baseline_canonical.yaml --strict-validation --out resul
 
 Current strict-validation behavior hard-fails on schema errors and on loader diagnostics that are warnings in non-strict mode, including stale ages, filename/version mismatches, and incomplete modeled-death data.
 
+Shared federal tax and Medicare defaults in `retireplan/defaults/policy_defaults.yaml` are pinned to published 2025 IRS and CMS values. The scenario model remains value-driven rather than year-driven, so regression tests lock the concrete default thresholds and premiums directly.
+
+Policy audit for the committed shared defaults:
+- Federal standard deduction: `30000` MFJ, `15000` single, `1600` MFJ age-65 add-on per person, `2000` single age-65 add-on
+- Federal brackets: MFJ `23850 / 96950 / 206700 / 394600 / 501050 / 751600`, single `11925 / 48475 / 103350 / 197300 / 250525 / 626350`
+- Medicare Part B base premium: `185.00` monthly
+- Medicare Part D default: `36.78` monthly national base amount, used as a simplified default even though real plan premiums vary
+- IRMAA thresholds: MFJ `212000 / 266000 / 334000 / 400000 / 750000`, single `106000 / 133000 / 167000 / 200000 / 500000`
+- IRMAA monthly add-ons: Part B `74.00 / 185.00 / 295.90 / 406.90 / 443.90`, Part D `13.70 / 35.30 / 57.00 / 78.60 / 85.80`
+
 Scenario merge behavior is fixed globally in code:
 - objects deep-merge
 - lists replace

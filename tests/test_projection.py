@@ -63,7 +63,7 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "covered_people": 0.0,
         "irmaa_tier": 0.0,
     }
-    assert first_year.taxes == {"federal": 12698.66, "state": 4015.21, "total": 16713.87}
+    assert first_year.taxes == {"federal": 11911.66, "state": 4015.21, "total": 15926.87}
     assert first_year.strategy == {
         "roth_conversion_total": 0.0,
         "conversion_tax_impact": 0.0,
@@ -75,7 +75,7 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert first_year.net_cash_flow == 77576.0
+    assert first_year.net_cash_flow == 78363.0
     assert first_year.withdrawals == {}
     assert first_year.mortgage == {
         "scheduled_payment": 11392.07,
@@ -93,15 +93,15 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
 
     assert payoff_year.medicare["covered_people"] == 1.42
     assert payoff_year.medicare == {
-        "part_b_base": 2972.76,
-        "part_d_base": 590.47,
-        "irmaa_part_b": 2972.76,
-        "irmaa_part_d": 536.02,
-        "total": 7072.01,
+        "part_b_base": 3148.03,
+        "part_d_base": 625.86,
+        "irmaa_part_b": 3148.03,
+        "irmaa_part_d": 600.68,
+        "total": 7522.61,
         "covered_people": 1.42,
         "irmaa_tier": 2.0,
     }
-    assert payoff_year.taxes == {"federal": 52125.78, "state": 10887.63, "total": 63013.41}
+    assert payoff_year.taxes == {"federal": 51019.78, "state": 10887.63, "total": 61907.41}
     assert payoff_year.mortgage == {
         "scheduled_payment": 20885.46,
         "extra_principal": 17920.26,
@@ -129,22 +129,22 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "Skipped 7855.47 of charitable giving because QCD-eligible IRA capacity was insufficient.",
         "Reduced Roth conversion from 160000.00 to 0.00 because of tax or IRMAA guardrails.",
     )
-    assert payoff_year.net_cash_flow == 164957.91
+    assert payoff_year.net_cash_flow == 165613.32
     assert payoff_year.liquid_resources_end == 1600922.18
 
     assert retirement_year.medicare == {
-        "part_b_base": 4192.8,
-        "part_d_base": 832.8,
+        "part_b_base": 4440.0,
+        "part_d_base": 882.72,
         "irmaa_part_b": 0.0,
         "irmaa_part_d": 0.0,
-        "total": 5025.6,
+        "total": 5322.72,
         "covered_people": 2.0,
         "irmaa_tier": 0.0,
     }
     assert retirement_year.strategy == {
         "roth_conversion_total": 160000.0,
-        "conversion_tax_impact": 34772.43,
-        "conversion_tax_payment": 28783.82,
+        "conversion_tax_impact": 34089.7,
+        "conversion_tax_payment": 27996.82,
         "conversion_tax_shortfall": 0.0,
         "rmd_total": 0,
         "qcd_total": 0.0,
@@ -152,7 +152,7 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert retirement_year.taxes == {"federal": 27978.98, "state": 6793.45, "total": 34772.43}
+    assert retirement_year.taxes == {"federal": 27280.21, "state": 6809.49, "total": 34089.7}
     assert retirement_year.mortgage == {
         "scheduled_payment": 0.0,
         "extra_principal": 0.0,
@@ -164,8 +164,8 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
     assert retirement_year.expenses["mortgage_payment"] == 0.0
     assert retirement_year.net_cash_flow == 0.0
     assert retirement_year.withdrawals == {
-        "Taxable Bridge Account": 28783.82,
-        "Husband Traditional IRA": 23053.43,
+        "Taxable Bridge Account": 27996.82,
+        "Husband Traditional IRA": 23454.82,
     }
     assert retirement_year.surplus_allocations == {}
     assert retirement_year.rollovers == {
@@ -173,15 +173,15 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "Husband Roth 401k -> Husband Roth IRA": 8243.24,
         "Wife Traditional 401k -> Wife Traditional IRA": 21569.81,
     }
-    assert retirement_year.liquid_resources_end == 1632423.85
+    assert retirement_year.liquid_resources_end == 1632813.0
 
     assert final_year.year == 2057
     assert final_year.medicare == {
-        "part_b_base": 2096.4,
-        "part_d_base": 416.4,
+        "part_b_base": 2220.0,
+        "part_d_base": 441.36,
         "irmaa_part_b": 0.0,
         "irmaa_part_d": 0.0,
-        "total": 2512.8,
+        "total": 2661.36,
         "covered_people": 1.0,
         "irmaa_tier": 0.0,
     }
@@ -196,23 +196,23 @@ def test_projection_matches_stage_7_baseline_checkpoints(golden_loaded):
         "charitable_giving_total": 0.0,
         "taxable_giving": 0.0,
     }
-    assert final_year.taxes == {"federal": 1563.07, "state": 594.36, "total": 2157.43}
+    assert final_year.taxes == {"federal": 1544.57, "state": 594.36, "total": 2138.93}
     assert final_year.mortgage["remaining_balance"] == 0.0
     assert final_year.withdrawals == {}
-    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4734.5}
-    assert final_year.net_cash_flow == 4734.5
-    assert final_year.liquid_resources_end == 7644600.14
+    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4604.44}
+    assert final_year.net_cash_flow == 4604.44
+    assert final_year.liquid_resources_end == 7647999.47
     assert final_year.alerts == (
         "Skipped 10617.11 of charitable giving because QCD-eligible IRA capacity was insufficient.",
     )
     assert result.summary == {
-        "terminal_net_worth": 7644600.14,
-        "total_taxes_paid": 485879.96,
-        "total_roth_converted": 583761.79,
-        "projected_rmds_by_year_total": 50669.69,
-        "total_qcd": 196084.78,
-        "total_given": 196084.78,
-        "traditional_balance_at_husband_age_70": 130959.73,
+        "terminal_net_worth": 7647999.47,
+        "total_taxes_paid": 475320.29,
+        "total_roth_converted": 585367.86,
+        "projected_rmds_by_year_total": 50685.07,
+        "total_qcd": 196144.29,
+        "total_given": 196144.29,
+        "traditional_balance_at_husband_age_70": 130999.47,
         "failure_year_if_any": None,
     }
     assert result.failure_year is None
@@ -288,10 +288,10 @@ def test_bridge_account_uses_only_explicit_modeled_contributions_before_retireme
     assert pre_retirement.surplus_allocations == {}
     assert bridge_spending_phase.contributions.get("Taxable Bridge Account", 0.0) == 0.0
     assert bridge_spending_phase.surplus_allocations == {}
-    assert bridge_spending_phase.withdrawals["Taxable Bridge Account"] == 28783.82
+    assert bridge_spending_phase.withdrawals["Taxable Bridge Account"] == 27996.82
     assert bridge_spending_phase.withdrawals["Husband Traditional IRA"] > 0.0
-    assert post_transition.surplus_allocations == {"Taxable Bridge Account": 14023.41}
-    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4734.5}
+    assert post_transition.surplus_allocations == {"Taxable Bridge Account": 13726.29}
+    assert final_year.surplus_allocations == {"Taxable Bridge Account": 4604.44}
 
 
 def test_pre_age_seventy_bridge_withdrawals_fall_back_after_other_accounts(golden_scenario):

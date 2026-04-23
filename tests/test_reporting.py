@@ -49,10 +49,10 @@ def test_reporting_bundle_contains_stage_8_tables_and_charts(golden_loaded):
     assert retirement_row["husband/wife ages"] == "66 / 66"
     assert retirement_row["rollover_total"] == 200491
     assert retirement_row["roth_conversion_total"] == 160000
-    assert cashflow_row["operating_gap_before_withdrawals"] == 23053
-    assert cashflow_row["bridge_withdrawal_for_conversion_taxes"] == 28784
+    assert cashflow_row["operating_gap_before_withdrawals"] == 23455
+    assert cashflow_row["bridge_withdrawal_for_conversion_taxes"] == 27997
     assert cashflow_row["bridge_withdrawal_for_operations"] == 0
-    assert cashflow_row["total_bridge_withdrawal"] == 28784
+    assert cashflow_row["total_bridge_withdrawal"] == 27997
     account_balance_chart = bundle["charts"]["account_balances_stacked"]
     assert account_balance_chart["x_axis"] == "age"
     assert account_balance_chart["y_axis_step"] % 50000 == 0

@@ -59,8 +59,8 @@ def test_irmaa_uses_two_year_lookback_with_single_thresholds(golden_scenario):
 
     assert summary.covered_people == 1
     assert summary.irmaa_tier == 2
-    assert summary.irmaa_part_b == 2096.4
-    assert summary.irmaa_part_d == 378.0
+    assert summary.irmaa_part_b == 2220.0
+    assert summary.irmaa_part_d == 423.6
     assert summary.alerts
 
 

@@ -62,9 +62,24 @@ def test_loader_applies_shared_defaults_when_scenario_omits_policy_table(tmp_pat
 
     assert loaded.scenario.assumptions.rmd_uniform_lifetime_table[75] == 24.6
     assert loaded.scenario.federal_tax.standard_deduction.mfj == 30000.0
+    assert loaded.scenario.federal_tax.standard_deduction.single == 15000.0
     assert loaded.scenario.federal_tax.standard_deduction.additional_age65_mfj_per_person == 1600.0
     assert loaded.scenario.federal_tax.standard_deduction.additional_age65_single == 2000.0
-    assert loaded.scenario.medicare.part_b.base_premium_monthly == 174.7
+    assert loaded.scenario.federal_tax.brackets.mfj[0].up_to == 23850
+    assert loaded.scenario.federal_tax.brackets.mfj[1].up_to == 96950
+    assert loaded.scenario.federal_tax.brackets.mfj[-2].up_to == 751600
+    assert loaded.scenario.federal_tax.brackets.single[0].up_to == 11925
+    assert loaded.scenario.federal_tax.brackets.single[1].up_to == 48475
+    assert loaded.scenario.federal_tax.brackets.single[-2].up_to == 626350
+    assert loaded.scenario.medicare.part_b.base_premium_monthly == 185.0
+    assert loaded.scenario.medicare.part_d.base_premium_monthly == 36.78
+    assert loaded.scenario.medicare.irmaa.mfj[0].magi_up_to == 212000
+    assert loaded.scenario.medicare.irmaa.mfj[1].part_b_add == 74.0
+    assert loaded.scenario.medicare.irmaa.mfj[-2].magi_up_to == 750000
+    assert loaded.scenario.medicare.irmaa.mfj[-1].part_d_add == 85.8
+    assert loaded.scenario.medicare.irmaa.single[0].magi_up_to == 106000
+    assert loaded.scenario.medicare.irmaa.single[2].part_d_add == 35.3
+    assert loaded.scenario.medicare.irmaa.single[-1].part_b_add == 443.9
     assert loaded.scenario.taxes.conversion_tax_payment.treatment == "annual_cash_outflow_same_year"
 
 

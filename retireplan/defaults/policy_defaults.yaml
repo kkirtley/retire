@@ -30,6 +30,7 @@ assumptions:
     100: 6.4
 
 federal_tax:
+  # Shared defaults are pinned to IRS tax year 2025 federal values.
   standard_deduction:
     mfj: 30000.00
     single: 15000.00
@@ -38,31 +39,33 @@ federal_tax:
 
   brackets:
     mfj:
-      - { rate: 0.10, up_to: 22000 }
-      - { rate: 0.12, up_to: 89450 }
-      - { rate: 0.22, up_to: 190750 }
-      - { rate: 0.24, up_to: 364200 }
-      - { rate: 0.32, up_to: 462500 }
-      - { rate: 0.35, up_to: 693750 }
+      - { rate: 0.10, up_to: 23850 }
+      - { rate: 0.12, up_to: 96950 }
+      - { rate: 0.22, up_to: 206700 }
+      - { rate: 0.24, up_to: 394600 }
+      - { rate: 0.32, up_to: 501050 }
+      - { rate: 0.35, up_to: 751600 }
       - { rate: 0.37, up_to: null }
 
     single:
-      - { rate: 0.10, up_to: 11000 }
-      - { rate: 0.12, up_to: 44725 }
-      - { rate: 0.22, up_to: 95375 }
-      - { rate: 0.24, up_to: 182100 }
-      - { rate: 0.32, up_to: 231250 }
-      - { rate: 0.35, up_to: 578125 }
+      - { rate: 0.10, up_to: 11925 }
+      - { rate: 0.12, up_to: 48475 }
+      - { rate: 0.22, up_to: 103350 }
+      - { rate: 0.24, up_to: 197300 }
+      - { rate: 0.32, up_to: 250525 }
+      - { rate: 0.35, up_to: 626350 }
       - { rate: 0.37, up_to: null }
 
 medicare:
+  # Shared defaults are pinned to CMS calendar year 2025 Part B and IRMAA values.
   start_age: 65
 
   part_b:
-    base_premium_monthly: 174.70
+    base_premium_monthly: 185.00
 
   part_d:
-    base_premium_monthly: 34.70
+    # Actual Part D premiums vary by plan; this default uses the 2025 national base amount.
+    base_premium_monthly: 36.78
 
   irmaa:
     lookback_years: 2
@@ -73,18 +76,20 @@ medicare:
       apply_after_retirement: true
       override_conversion_guardrails: false
     mfj:
-      - { magi_up_to: 206000, part_b_add: 0.00, part_d_add: 0.00 }
-      - { magi_up_to: 258000, part_b_add: 69.90, part_d_add: 12.20 }
-      - { magi_up_to: 322000, part_b_add: 174.70, part_d_add: 31.50 }
-      - { magi_up_to: 386000, part_b_add: 279.40, part_d_add: 50.70 }
-      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
+      - { magi_up_to: 212000, part_b_add: 0.00, part_d_add: 0.00 }
+      - { magi_up_to: 266000, part_b_add: 74.00, part_d_add: 13.70 }
+      - { magi_up_to: 334000, part_b_add: 185.00, part_d_add: 35.30 }
+      - { magi_up_to: 400000, part_b_add: 295.90, part_d_add: 57.00 }
+      - { magi_up_to: 750000, part_b_add: 406.90, part_d_add: 78.60 }
+      - { magi_up_to: null, part_b_add: 443.90, part_d_add: 85.80 }
 
     single:
-      - { magi_up_to: 103000, part_b_add: 0.00, part_d_add: 0.00 }
-      - { magi_up_to: 129000, part_b_add: 69.90, part_d_add: 12.20 }
-      - { magi_up_to: 161000, part_b_add: 174.70, part_d_add: 31.50 }
-      - { magi_up_to: 193000, part_b_add: 279.40, part_d_add: 50.70 }
-      - { magi_up_to: null, part_b_add: 384.10, part_d_add: 70.00 }
+      - { magi_up_to: 106000, part_b_add: 0.00, part_d_add: 0.00 }
+      - { magi_up_to: 133000, part_b_add: 74.00, part_d_add: 13.70 }
+      - { magi_up_to: 167000, part_b_add: 185.00, part_d_add: 35.30 }
+      - { magi_up_to: 200000, part_b_add: 295.90, part_d_add: 57.00 }
+      - { magi_up_to: 500000, part_b_add: 406.90, part_d_add: 78.60 }
+      - { magi_up_to: null, part_b_add: 443.90, part_d_add: 85.80 }
 
 taxes:
   conversion_tax_payment:

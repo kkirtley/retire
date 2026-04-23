@@ -21,7 +21,7 @@ def test_federal_tax_applies_standard_deduction_and_brackets_for_mfj(golden_scen
 
     assert summary.standard_deduction == 30000.0
     assert summary.federal_taxable_income == 120000.0
-    assert summary.federal_tax == 17015.0
+    assert summary.federal_tax == 16228.0
     assert summary.state_tax == 4800.0
 
 
@@ -105,7 +105,7 @@ def test_traditional_withdrawals_become_ordinary_income(golden_scenario):
     assert summary.ordinary_income == 32000.0
     assert summary.taxable_social_security == 10450.0
     assert summary.federal_taxable_income == 27450.0
-    assert summary.federal_tax == 3074.0
+    assert summary.federal_tax == 3055.5
     assert summary.state_tax == 1098.0
 
 
